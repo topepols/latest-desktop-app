@@ -13,9 +13,40 @@ body{margin:0;background:var(--bg);color:#0f172a}
 .view.active-view{display:block}
 .view-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .small-info{display:flex;gap:12px}
-.cards{display:grid;grid-template-columns:1fr 360px;gap:12px}
-.card{background:#fff;border-radius:8px;padding:12px;box-shadow:0 4px 12px rgba(15,23,42,0.06)}
-.card.full{grid-column:1/-1}
+/* Container for the two boxes */
+.cards {
+  display: grid;
+  /* 1fr = "Free Space" (Graph), 350px = Fixed Width (Alerts) */
+  grid-template-columns: 1fr 350px; 
+  gap: 20px;
+  /* Enforce a specific height so they are always the same height */
+  height: 400px; 
+  margin-top: 20px;
+}
+
+/* Common Card Styling */
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(15,23,42,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevents content from spilling out */
+}
+
+/* Specific fix for the Graph Card to prevent breaking */
+.card.graph-card {
+  min-width: 0; /* CRITICAL: Prevents grid blowout on resize */
+  position: relative;
+}
+
+/* Ensure the Alerts list scrolls if it gets too long, rather than stretching the box */
+.alerts {
+  overflow-y: auto;
+  flex: 1; /* Fills remaining height of the card */
+  padding-right: 5px;
+}
 .table{width:100%;border-collapse:collapse}
 .table th,.table td{padding:8px;border-bottom:1px solid #eef2f7;text-align:left}
 .btn{padding:8px 10px;border-radius:6px;border:0;cursor:pointer}
@@ -120,51 +151,60 @@ body{margin:0;background:var(--bg);color:#0f172a}
   gap: 10px;
   margin-top: 15px;
 }
-/* Hide sidebar by default */
+/* --- SIDEBAR SETUP --- */
 .sidebar {
   position: fixed;
-  left: -240px; /* hide off-screen */
+  left: -240px; /* Hidden off-screen by default */
   top: 0;
   height: 100%;
   width: 220px;
-  padding: 20px;
   background: #0b1220;
   color: #fff;
+  transition: left 0.3s ease; /* Smooth slide animation */
+  z-index: 1000;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  transition: left 0.3s ease;
-  z-index: 1000;
+  padding: 20px;
 }
 
-/* Show sidebar when active */
+/* When sidebar is active (Open) */
 .sidebar.active {
   left: 0;
 }
 
-/* Adjust main content when sidebar is visible */
-.main {
-  flex: 1;
-  padding: 20px;
-  margin-left: 0;
-  transition: margin-left 0.3s ease;
-}
-
-.main.sidebar-active {
-  margin-left: 220px;
-}
-
-/* Hamburger button */
+/* --- TOGGLE BUTTON ANIMATION --- */
 #btnToggleSidebar {
   position: fixed;
   top: 15px;
-  left: 15px;
+  
+  /* STATE 1: CLOSED -> Top Left of white screen */
+  left: 15px; 
+  
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 8px 10px;
+  padding: 8px 12px; /* Slightly wider for better touch target */
   border-radius: 4px;
   cursor: pointer;
-  z-index: 1100;
+  z-index: 1100; /* Must be higher than sidebar z-index */
+  
+  /* This ensures the button slides smoothly with the sidebar */
+  transition: left 0.3s ease; 
+}
+
+/* STATE 2: OPEN -> Top Right of the Sidebar */
+/* The ~ symbol means: "If sidebar is active, affect the button next to it" */
+.sidebar.active ~ #btnToggleSidebar {
+  /* Calculation: Sidebar Width (220px) - Button Width (~50px) = 170px */
+  left: 170px; 
+}
+
+/* Optional: Main content pushes over */
+.main {
+  transition: margin-left 0.3s ease;
+  margin-left: 0;
+}
+.main.sidebar-active {
+  margin-left: 220px; /* Matches sidebar width */
 }
 

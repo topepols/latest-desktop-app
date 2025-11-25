@@ -128,7 +128,7 @@ document.getElementById('btnGenerateQR').onclick = () => {
 };
 
 // =============================
-// SAVE ITEM
+// SAVE ITEM (Modified)
 // =============================
 document.getElementById('btnSaveItem').onclick = () => {
   const name = document.getElementById('mName').value;
@@ -144,14 +144,17 @@ document.getElementById('btnSaveItem').onclick = () => {
   const item = { name, quantity, date, unit, prices: { pcs, box, tub } };
 
   if(currentEditIndex !== null) {
-    // Edit item
+    // EDIT MODE: We just update the inventory details
+    // We do NOT usually log an "Edit" as a transaction, 
+    // but we update the inventory object.
     inventory[currentEditIndex] = item;
-    reports[currentEditIndex] = item;
     currentEditIndex = null;
   } else {
-    // New item
+    // NEW ITEM MODE
     inventory.push(item);
-    reports.push(item);
+    
+    // LOG IT TO REPORTS
+    logTransaction(item, "NEW ITEM", quantity);
   }
 
   closeModal();
@@ -163,10 +166,15 @@ document.getElementById('btnSaveItem').onclick = () => {
 // =============================
 // INVENTORY RENDERING
 // =============================
+// =============================
+// INVENTORY RENDERING
+// =============================
+// UPDATED renderInventory (Cleaner)
+// UPDATED renderInventory (Cleaner)
 function renderInventory() {
   const tbody = document.querySelector('#inventoryTable tbody');
   tbody.innerHTML = '';
-  inventory.forEach((item,i) => {
+  inventory.forEach((item, i) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${item.name}</td>
@@ -174,13 +182,15 @@ function renderInventory() {
       <td>${item.date}</td>
       <td>PCS: ₱${item.prices.pcs}<br>BOX: ₱${item.prices.box}<br>TUB: ₱${item.prices.tub}</td>
       <td>
-        <button class="btn" onclick="editItem(${i})">Edit</button>
-        <button class="btn" onclick="getItem(${i})">GET</button>
-      </td>
+        <button class="btn" onclick="window.prepareEdit('${item.id}')">Edit</button>
+        </td>
     `;
     tbody.appendChild(tr);
   });
 }
+
+
+
 
 // =============================
 // EDIT / GET ITEMS
@@ -199,33 +209,151 @@ window.editItem = (i) => {
   document.getElementById('modal').style.display = 'flex';
 };
 
-window.getItem = (i) => {
-  if(confirm('Mark this item as GET?')) {
-    inventory.splice(i,1);
-    renderInventory();
-    renderDashboard();
-    // Do NOT remove from reports, only inventory changes
+// =============================
+// ADJUST STOCK LOGIC (Updated)
+// =============================
+let adjustIndex = null;
+let adjustAmount = 1;
+
+window.openAdjust = (i) => {
+  const item = inventory[i];
+  adjustIndex = i;
+  adjustAmount = 1;
+  document.getElementById('adjustName').textContent = item.name;
+  document.getElementById('adjustCurrentStock').textContent = item.quantity;
+  document.getElementById('adjustInput').value = adjustAmount;
+  document.getElementById('adjustModal').style.display = 'flex';
+};
+
+// ... (Keep your +/- button logic the same) ...
+document.getElementById('btnAdjPlus').onclick = () => {
+  adjustAmount++;
+  document.getElementById('adjustInput').value = adjustAmount;
+};
+document.getElementById('btnAdjMinus').onclick = () => {
+  if (adjustAmount > 1) {
+    adjustAmount--;
+    document.getElementById('adjustInput').value = adjustAmount;
   }
 };
 
+// ACTION: RESTOCK (Add)
+document.getElementById('btnActionAdd').onclick = () => {
+  if (adjustIndex === null) return;
+  
+  const item = inventory[adjustIndex];
+  
+  // 1. Update Inventory
+  item.quantity += adjustAmount;
+
+  // 2. Log to Reports
+  logTransaction(item, "RESTOCK", adjustAmount);
+
+  finalizeAdjustment();
+};
+
+// ACTION: GET (Remove)
+document.getElementById('btnActionRemove').onclick = () => {
+  if (adjustIndex === null) return;
+
+  const item = inventory[adjustIndex];
+  const currentQty = item.quantity;
+
+  if (adjustAmount >= currentQty) {
+    const confirmDelete = confirm(`This will remove "${item.name}" completely. Proceed?`);
+    if(confirmDelete) {
+      // Log the final removal before deleting
+      logTransaction(item, "GET/SOLD", currentQty); 
+      
+      inventory.splice(adjustIndex, 1);
+    } else {
+      return; 
+    }
+  } else {
+    // Decrease Inventory
+    item.quantity -= adjustAmount;
+    
+    // Log to Reports
+    logTransaction(item, "SOLD", adjustAmount);
+  }
+
+  finalizeAdjustment();
+};
+
+function finalizeAdjustment() {
+  renderInventory();
+  renderReports(); // Make sure this is called!
+  renderDashboard();
+  document.getElementById('adjustModal').style.display = 'none';
+}
+
+// 5. HELPER: SAVE AND CLOSE
+function finalizeAdjustment() {
+  renderInventory(); // Refresh Table
+  renderDashboard(); // Refresh Charts/Alerts
+  
+  document.getElementById('adjustModal').style.display = 'none';
+}
+
+// Cancel Button
+document.getElementById('btnAdjustCancel').onclick = () => {
+  document.getElementById('adjustModal').style.display = 'none';
+};
+
 // =============================
-// REPORTS RENDERING
+// REPORTS RENDERING (Updated for History)
 // =============================
 function renderReports() {
   const tbody = document.querySelector('#reportsTable tbody');
+  
+  // Update Header to include "Type" if you haven't already in HTML
+  // (Ideally, add <th>Action</th> to your HTML <thead>)
+  
   tbody.innerHTML = '';
-  reports.forEach(item => {
-    const minPrice = Math.min(item.prices.pcs,item.prices.box,item.prices.tub);
+  
+  // We reverse() the array so the newest actions appear at the top
+  reports.slice().reverse().forEach(log => {
+    const totalValue = log.quantity * log.unitPrice; // Calculate value of this specific transaction
+
     const row = document.createElement('tr');
+    
+    // Color code the action type
+    let color = '#333';
+    if(log.type === 'RESTOCK') color = '#2ecc71'; // Green
+    if(log.type === 'GET/SOLD') color = '#e74c3c'; // Red
+    if(log.type === 'NEW ITEM') color = '#3498db'; // Blue
+
     row.innerHTML = `
-      <td>${item.name}</td>
-      <td>${item.quantity}</td>
-      <td>${item.date}</td>
-      <td>PCS: ₱${item.prices.pcs}, BOX: ₱${item.prices.box}, TUB: ₱${item.prices.tub}</td>
-      <td>₱${minPrice.toFixed(2)}</td>
+      <td>${log.name}</td>
+      <td style="color:${color}; font-weight:bold;">${log.type}</td>
+      <td>${log.quantity}</td>
+      <td>${log.date}</td>
+      <td>₱${totalValue.toFixed(2)}</td>
     `;
     tbody.appendChild(row);
   });
+}
+
+// =============================
+// HELPER: LOG TRANSACTIONS
+// =============================
+function logTransaction(item, type, qtyChange) {
+ 
+  const today = new Date().toISOString().split('T')[0];
+
+  
+  const unitPrice = item.prices.pcs; 
+
+  const logEntry = {
+    name: item.name,
+    type: type,          // "NEW ITEM", "RESTOCK", or "GET/SOLD"
+    quantity: qtyChange, // How many were moved
+    date: today,
+    unitPrice: unitPrice,
+    prices: item.prices  // Keep full price ref just in case
+  };
+
+  reports.push(logEntry);
 }
 
 // =============================
@@ -253,20 +381,56 @@ function renderDashboard() {
   // Overview chart based on total price of saved items
   const ctx = document.getElementById('stockChart').getContext('2d');
   if(stockChart) stockChart.destroy();
+
+  // 1. GENERATE COLORS BASED ON YOUR RULES
+  const backgroundColors = inventory.map(item => {
+    // RULE 1: Priority is Low Stock (< 5)
+    if (item.quantity < 5) {
+      return '#e74c3c'; // RED (Danger)
+    }
+
+    // RULE 2: Unit Colors
+    switch (item.unit) {
+      case 'pcs': return '#3498db'; // BLUE
+      case 'box': return '#f1c40f'; // YELLOW
+      case 'tub': return '#2ecc71'; // GREEN
+      default:    return '#95a5a6'; // Grey (Fallback)
+    }
+  });
+
+  // 2. CREATE CHART
   stockChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: inventory.map(x => x.name),
+      // Add Unit to label so you know what it is (e.g., "Soap (box)")
+      labels: inventory.map(x => `${x.name} (${x.unit})`), 
       datasets: [{
-        label: 'Total Price per Item',
-        data: inventory.map(x => x.prices.pcs + x.prices.box + x.prices.tub),
-        backgroundColor: 'rgba(75, 192, 192, 0.5)'
+        label: 'Quantity',
+        data: inventory.map(x => x.quantity),
+        backgroundColor: backgroundColors, // <--- APPLY THE COLOR LOGIC HERE
+        borderRadius: 4,
+        maxBarThickness: 50
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: true } },
-      scales: { y: { beginAtZero: true } }
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { display: false }, // Hide legend because colors vary per bar
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `Stock: ${context.raw}`;
+            }
+          }
+        }
+      },
+      scales: { 
+        y: { 
+          beginAtZero: true,
+          ticks: { stepSize: 1 } 
+        } 
+      }
     }
   });
 }
@@ -305,3 +469,88 @@ document.getElementById('modalCancel').onclick = closeModal;
 // INITIAL SETUP
 // =============================
 setupNav();
+// =============================
+// BULK / RAPID ADJUSTMENT LOGIC
+// =============================
+
+// 1. Open the Modal
+document.getElementById('btnOpenBulk').onclick = () => {
+  renderBulkTable();
+  document.getElementById('bulkModal').style.display = 'flex';
+};
+
+// 2. Close the Modal & Refresh Main Views
+document.getElementById('btnBulkClose').onclick = () => {
+  document.getElementById('bulkModal').style.display = 'none';
+  renderInventory(); // Refresh main table to show changes
+  renderDashboard(); // Update charts/totals
+};
+
+// 3. Render the Bulk Table
+function renderBulkTable() {
+  const tbody = document.querySelector('#bulkTable tbody');
+  tbody.innerHTML = '';
+
+  inventory.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    
+    // We create unique IDs for inputs based on the index (e.g., bulk-qty-0)
+    tr.innerHTML = `
+      <td style="font-weight:bold;">${item.name} <span style="font-size:0.8em; color:#666;">(${item.unit})</span></td>
+      <td id="bulk-stock-${index}" style="font-size:1.1em; text-align:center;">${item.quantity}</td>
+      <td>
+        <div style="display:flex; justify-content:center; gap:5px;">
+           <button class="btn" onclick="adjustBulkInput(${index}, -1)" style="padding:2px 8px;">-</button>
+           <input id="bulk-qty-${index}" type="number" value="1" min="1" style="width:50px; text-align:center;">
+           <button class="btn" onclick="adjustBulkInput(${index}, 1)" style="padding:2px 8px;">+</button>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex; gap:5px; justify-content:center;">
+          <button class="btn" style="background:#2ecc71; color:fff; padding:5px 10px;" onclick="processBulkAction(${index}, 'add')">Add</button>
+          <button class="btn" style="background:#e74c3c; color:fff; padding:5px 10px;" onclick="processBulkAction(${index}, 'remove')">Sold</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// 4. Helper: +/- Buttons inside the table
+window.adjustBulkInput = (index, change) => {
+  const input = document.getElementById(`bulk-qty-${index}`);
+  let val = parseInt(input.value) || 0;
+  val += change;
+  if(val < 1) val = 1; // Prevent negative inputs
+  input.value = val;
+};
+
+// 5. Process the Action (Add/Sold)
+window.processBulkAction = (index, action) => {
+  const item = inventory[index];
+  const input = document.getElementById(`bulk-qty-${index}`);
+  const amount = parseInt(input.value) || 0;
+
+  if (amount <= 0) return;
+
+  if (action === 'add') {
+    // RESTOCK LOGIC
+    item.quantity += amount;
+    logTransaction(item, "RESTOCK", amount);
+  } 
+  else if (action === 'remove') {
+    // SOLD LOGIC
+    if (item.quantity < amount) {
+      alert(`Not enough stock! You only have ${item.quantity}.`);
+      return;
+    }
+    item.quantity -= amount;
+    logTransaction(item, "SOLD", amount);
+  }
+
+  // Visual Feedback: Flash the row or update the number immediately
+  document.getElementById(`bulk-stock-${index}`).textContent = item.quantity;
+  
+  // Optional: Reset input back to 1 after action
+  input.value = 1; 
+};
