@@ -1,0 +1,12 @@
+{
+  "name": "electron-inventory-app",
+  "version": "1.0.0",
+  "description": "Inventory Management System (frontend-only)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^26.6.10"
+  }
+}
