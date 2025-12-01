@@ -11,6 +11,16 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
   <link rel="stylesheet" href="modern.css" />
+
+  <!-- IMPORT MAP: Bridges standard imports to working URLs -->
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="app">
@@ -51,40 +61,40 @@
       </section>
 
       <section id="view-dashboard" class="view">
-  <header class="view-header">
-    <h2>Dashboard</h2>
-    <div class="small-info">
-      <div>Total Items: <b id="totalItems">0</b></div>
-      <div style="margin-left: 15px;">Total Expenses: <b id="totalExpenses">₱0.00</b></div>
-    </div>
-  </header>
+        <header class="view-header">
+          <h2>Dashboard</h2>
+          <div class="small-info">
+            <div>Total Items: <b id="totalItems">0</b></div>
+            <div style="margin-left: 15px;">Total Value: <b id="totalExpenses">₱0.00</b></div>
+          </div>
+        </header>
 
-  <div class="cards">
-    
-    <div class="card graph-card">
-      <h3>Overview</h3>
-      <div style="position: relative; flex: 1; width: 100%;">
-        <canvas id="stockChart"></canvas>
-      </div>
-    </div>
+        <div class="cards">
+          <div class="card graph-card">
+            <h3>Overview</h3>
+            <div style="position: relative; flex: 1; width: 100%;">
+              <canvas id="stockChart"></canvas>
+            </div>
+          </div>
 
-    <div class="card">
-      <h3>Low Stock Alerts</h3>
-      <ul id="alertsList" class="alerts"></ul>
-    </div>
-
-  </div>
-</section>
+          <div class="card">
+            <h3>Low Stock Alerts</h3>
+            <ul id="alertsList" class="alerts"></ul>
+          </div>
+        </div>
+      </section>
 
       <!-- INVENTORY VIEW -->
       <section id="view-inventory" class="view">
         <header class="view-header">
             <h2>Inventory</h2>
-            <div class="actions"> <button id="btnOpenBulk" class="btn" style="background:#8e44ad; color:white; margin-right:10px;">
+            <div class="actions"> 
+              <button id="btnOpenBulk" class="btn" style="background:#8e44ad; color:white; margin-right:10px;">
                 ⚡ Rapid Adjust / GET
               </button>
               <button id="btnAddItem" class="btn primary">➕ Add Item</button>
-            </div> </header>
+            </div> 
+        </header>
         <input id="inventorySearch" type="text" placeholder="Search items..." class="search-bar" />
         <div class="card full">
           <table id="inventoryTable" class="table">
@@ -116,9 +126,11 @@
           <thead>
             <tr>
               <th>Product Name</th>
-              <th>Action</th>      <th>Quantity</th>
+              <th>Action</th>      
+              <th>Quantity</th>
               <th>Date</th>
-              <th>Extended Price</th> </tr>
+              <th>Value</th> 
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -155,59 +167,61 @@
       </div>
     </div>
   </div>
+
   <div id="adjustModal" class="modal">
-  <div class="modal-card">
-    <h3>Adjust Stock: <span id="adjustName" style="color: #3498db;"></span></h3>
-    <p>Current In Stock: <b id="adjustCurrentStock" style="font-size: 1.2rem;"></b></p>
-    
-    <div class="quantity-control" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0;">
-      <button id="btnAdjMinus" class="btn" style="font-size: 1.5rem; width: 45px;">-</button>
-      <input id="adjustInput" type="number" value="1" style="width: 80px; text-align: center; font-size: 1.5rem; padding: 5px;" readonly>
-      <button id="btnAdjPlus" class="btn" style="font-size: 1.5rem; width: 45px;">+</button>
-    </div>
-
-    <div class="modal-actions" style="display: flex; gap: 10px; justify-content: center;">
-      <button id="btnActionAdd" class="btn" style="background-color: #2ecc71; color: white; flex: 1; padding: 10px;">
-        📥 RESTOCK (Add)
-      </button>
+    <div class="modal-card">
+      <h3>Adjust Stock: <span id="adjustName" style="color: #3498db;"></span></h3>
+      <p>Current In Stock: <b id="adjustCurrentStock" style="font-size: 1.2rem;"></b></p>
       
-      <button id="btnActionRemove" class="btn" style="background-color: #e74c3c; color: white; flex: 1; padding: 10px;">
-        📤 GET (Remove)
-      </button>
-    </div>
+      <div class="quantity-control" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0;">
+        <button id="btnAdjMinus" class="btn" style="font-size: 1.5rem; width: 45px;">-</button>
+        <input id="adjustInput" type="number" value="1" style="width: 80px; text-align: center; font-size: 1.5rem; padding: 5px;" readonly>
+        <button id="btnAdjPlus" class="btn" style="font-size: 1.5rem; width: 45px;">+</button>
+      </div>
 
-    <div class="row" style="margin-top: 15px;">
-      <button id="btnAdjustCancel" class="btn" style="width: 100%;">Cancel</button>
-    </div>
-  </div>
-</div>
+      <div class="modal-actions" style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btnActionAdd" class="btn" style="background-color: #2ecc71; color: white; flex: 1; padding: 10px;">
+          📥 RESTOCK (Add)
+        </button>
+        
+        <button id="btnActionRemove" class="btn" style="background-color: #e74c3c; color: white; flex: 1; padding: 10px;">
+          📤 GET (Remove)
+        </button>
+      </div>
 
-    <div id="bulkModal" class="modal">
-  <div class="modal-card" style="min-width: 600px; max-width: 90%;">
-    <h3>Rapid Stock Adjustment</h3>
-    <p class="muted">Manage stock for all items in one place.</p>
-    
-    <div style="max-height: 60vh; overflow-y: auto; margin: 15px 0; border: 1px solid #eee;">
-      <table class="table" id="bulkTable">
-        <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
-          <tr>
-            <th>Item Name</th>
-            <th style="width: 80px;">Current</th>
-            <th style="width: 150px; text-align:center;">Amount</th>
-            <th style="text-align:center;">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          </tbody>
-      </table>
-    </div>
-
-    <div class="row">
-      <button id="btnBulkClose" class="btn" style="width: 100%;">Done / Close</button>
+      <div class="row" style="margin-top: 15px;">
+        <button id="btnAdjustCancel" class="btn" style="width: 100%;">Cancel</button>
+      </div>
     </div>
   </div>
-</div>
 
-  <script src="renderers.js"></script>
+  <div id="bulkModal" class="modal">
+    <div class="modal-card" style="min-width: 600px; max-width: 90%;">
+      <h3>Rapid Stock Adjustment</h3>
+      <p class="muted">Manage stock for all items in one place.</p>
+      
+      <div style="max-height: 60vh; overflow-y: auto; margin: 15px 0; border: 1px solid #eee;">
+        <table class="table" id="bulkTable">
+          <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+            <tr>
+              <th>Item Name</th>
+              <th style="width: 80px;">Current</th>
+              <th style="width: 150px; text-align:center;">Amount</th>
+              <th style="text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            </tbody>
+        </table>
+      </div>
+
+      <div class="row">
+        <button id="btnBulkClose" class="btn" style="width: 100%;">Done / Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note type="module" here -->
+  <script type="module" src="renderers.js"></script>
 </body>
 </html>
