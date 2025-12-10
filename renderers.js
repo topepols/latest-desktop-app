@@ -16,7 +16,7 @@ import {
 // =============================
 let inventory = [];
 let reports = [];
-let currentEditId = null; // Changed from index to ID
+let currentEditId = null; 
 let currentUser = null;
 
 // =============================
@@ -31,7 +31,7 @@ function initListeners() {
       ...doc.data()
     }));
     renderInventory();
-    renderDashboard(); // Update dashboard whenever inventory changes
+    renderDashboard(); 
     
     // If bulk modal is open, refresh it live
     if(document.getElementById('bulkModal').style.display === 'flex') {
@@ -39,8 +39,7 @@ function initListeners() {
     }
   });
 
-  // Listen to Reports (History)
-  // We order by 'timestamp' desc so newest is first
+  // Listen to Reports
   const qReports = query(collection(db, "reports"), orderBy("timestamp", "desc"));
   onSnapshot(qReports, (snapshot) => {
     reports = snapshot.docs.map(doc => doc.data());
@@ -56,13 +55,17 @@ initListeners();
 // =============================
 const accounts = { admin: 'admin123', manager: 'manager123' };
 
-// Expose to window because module scope is private
 window.handleLogin = () => {
   const u = document.getElementById('loginUsername').value;
   const p = document.getElementById('loginPassword').value;
+  
   if (accounts[u] && accounts[u] === p) {
     currentUser = u;
     document.getElementById('currentUserLabel').textContent = u;
+    
+    // --- 1. SHOW SIDEBAR ON LOGIN ---
+    document.getElementById('appSidebar').style.display = 'block'; // <--- ADDED THIS
+
     switchView('dashboard');
     setupNav();
     renderDashboard();
@@ -78,19 +81,27 @@ document.getElementById('btnLogin').onclick = window.handleLogin;
 function setupNav() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.onclick = () => {
+      // --- LOGOUT LOGIC ---
       if(item.id === 'logoutBtn') {
         currentUser = null;
         document.getElementById('currentUserLabel').textContent = '-';
+        
+        // --- 2. HIDE SIDEBAR ON LOGOUT ---
+        document.getElementById('appSidebar').style.display = 'none'; // <--- ADDED THIS
+        
         switchView('login');
         return;
       }
+
       const view = item.getAttribute('data-view');
       if (view) switchView(view);
     };
   });
 
   document.getElementById('btnToggleSidebar').onclick = () => {
-    document.querySelector('.sidebar').classList.toggle('active');
+    // Note: Use 'appSidebar' ID if you changed the class logic, 
+    // or keep querySelector('.sidebar') if you kept the class name "sidebar"
+    document.getElementById('appSidebar').classList.toggle('active');
     document.querySelector('.main').classList.toggle('sidebar-active');
   };
 }
@@ -126,7 +137,7 @@ function closeModal() {
   document.getElementById('modal').style.display = 'none';
 }
 
-// Make globally accessible for HTML onclicks
+// Make globally accessible
 window.openAddItem = openAddItem;
 window.closeModal = closeModal;
 
@@ -177,10 +188,8 @@ document.getElementById('btnSaveItem').onclick = async () => {
 
   try {
     if (currentEditId) {
-      // Update existing
       await updateDoc(doc(db, "inventory", currentEditId), itemData);
     } else {
-      // Create new
       await addDoc(collection(db, "inventory"), itemData);
       logTransaction(itemData, "NEW ITEM", quantity);
     }
@@ -198,9 +207,7 @@ function renderInventory() {
   const tbody = document.querySelector('#inventoryTable tbody');
   tbody.innerHTML = '';
   
-  // Local search filtering
   const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-  
   const filtered = inventory.filter(item => item.name.toLowerCase().includes(searchTerm));
 
   filtered.forEach((item) => {
@@ -225,7 +232,6 @@ function renderInventory() {
 
 document.getElementById('inventorySearch').addEventListener('input', renderInventory);
 
-// Edit function (Global)
 window.editItem = (id) => {
   const item = inventory.find(x => x.id === id);
   if(!item) return;
@@ -313,7 +319,7 @@ document.getElementById('btnAdjustCancel').onclick = () => {
 // =============================
 async function logTransaction(item, type, qtyChange) {
   const today = new Date().toISOString().split('T')[0];
-  const unitPrice = item.prices[item.unit] || 0; // Use specific unit price
+  const unitPrice = item.prices[item.unit] || 0;
 
   await addDoc(collection(db, "reports"), {
     name: item.name,
@@ -322,7 +328,7 @@ async function logTransaction(item, type, qtyChange) {
     date: today,
     unitPrice: unitPrice,
     prices: item.prices,
-    timestamp: serverTimestamp() // Allows sorting by time
+    timestamp: serverTimestamp()
   });
 }
 
@@ -334,7 +340,6 @@ function renderReports() {
   tbody.innerHTML = '';
   
   reports.forEach(log => {
-    
     const totalValue = (log.quantity || 0) * (log.unitPrice || 0);
     
     let color = '#333';
