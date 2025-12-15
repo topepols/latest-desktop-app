@@ -5,14 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Inventory Management System</title>
 
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- QRCode library -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
   <link rel="stylesheet" href="modern.css" />
 
-  <!-- IMPORT MAP: Bridges standard imports to working URLs -->
   <script type="importmap">
     {
       "imports": {
@@ -39,7 +36,6 @@
     </nav>
 
     <main class="main">
-      <!-- LOGIN VIEW -->
       <section id="view-login" class="view active-view">
         <div class="login-card">
           <h1>Inventory Management System</h1>
@@ -49,11 +45,6 @@
             <label>Password<input id="loginPassword" type="password" placeholder="password" /></label>
             <div class="row">
               <button id="btnLogin" class="btn primary">Login</button>
-            </div>
-            <div class="credentials">
-              <p><b>Stored accounts (default):</b></p>
-              <p>Admin — <code>admin</code> / <code>admin123</code></p>
-              <p>Manager — <code>manager</code> / <code>manager123</code></p>
             </div>
             <div id="loginError" class="error"></div>
           </div>
@@ -70,53 +61,74 @@
         </header>
 
         <div class="cards">
-          <div class="card graph-card">
-            <h3>Overview</h3>
-            <div style="position: relative; flex: 1; width: 100%;">
-              <canvas id="stockChart"></canvas>
+            
+            <div class="card graph-card">
+                <h3>Current Stock Levels</h3>
+                <div class="chart-header-row">
+                    <div style="width: 130px; text-align:right; padding-right:15px;">Item Name</div>
+                    <div style="flex:1; padding-left: 5px;">Quantity</div>
+                </div>
+                <div id="scrollableChart" class="chart-scroll-area">
+                    </div>
             </div>
-          </div>
 
-          <div class="card">
-            <h3>Low Stock Alerts</h3>
-            <ul id="alertsList" class="alerts"></ul>
-          </div>
-        </div>
-      </section>
+            <div class="card">
+                <h3>Low Stock Alerts</h3>
+                <ul id="alertsList" class="alerts">
+                    </ul>
+            </div>
+            
 
-      <!-- INVENTORY VIEW -->
+        </div> 
+        </section>
+
       <section id="view-inventory" class="view">
         <header class="view-header">
-            <h2>Inventory</h2>
-            <div class="actions"> 
-              <button id="btnOpenBulk" class="btn" style="background:#8e44ad; color:white; margin-right:10px;">
-                ⚡ Rapid Adjust / GET
-              </button>
-              <button id="btnAddItem" class="btn primary">➕ Add Item</button>
-            </div> 
-        </header>
+    <h2>Inventory</h2>
+    <div class="actions"> 
+      
+      <select id="sortInventory" class="btn" style="margin-right: 10px; border: 1px solid #ccc; background: white;">
+        <option value="alpha">Alphabetical (A-Z)</option>
+        <option value="qtyLow">Quantity (Low to High)</option>
+        <option value="qtyHigh">Quantity (High to Low)</option>
+        <option value="dateNew">Date (Newest First)</option>
+        <option value="dateOld">Date (Oldest First)</option>
+      </select>
+
+      <button id="btnOpenBulk" class="btn" style="background:#8e44ad; color:white; margin-right:10px;">
+        ⚡ Rapid Adjust / GET
+      </button>
+      <button id="btnAddItem" class="btn primary">➕ Add Item</button>
+    </div> 
+</header>
         <input id="inventorySearch" type="text" placeholder="Search items..." class="search-bar" />
         <div class="card full">
           <table id="inventoryTable" class="table">
-            <thead>
-              <tr>
-                <th>Product Name</th>
-                <th>Quantity</th>
-                <th>Date</th>
-                <th>Unit Prices</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th>Category</th> 
+              <th>Quantity</th>
+              <th>Date</th>
+              <th>Unit Prices</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
         </div>
       </section>
 
-      <!-- REPORTS VIEW -->
       <section id="view-reports" class="view">
         <header class="view-header">
           <h2>Reports</h2>
           <div>
+            <select id="sortReports" class="btn" style="margin-right: 10px; border: 1px solid #ccc; background: white;">
+              <option value="dateNew">Date (Newest First)</option>
+              <option value="dateOld">Date (Oldest First)</option>
+              <option value="action">Action Type (A-Z)</option>
+            </select>
+
             <button id="btnPrint" class="btn">🖨️ Print</button>
             <button id="btnExportCsv" class="btn">Export to CSV</button>
           </div>
@@ -139,31 +151,49 @@
     </main>
   </div>
 
-  <!-- Modal for QR / Item Details -->
   <div id="modal" class="modal">
     <div class="modal-card">
       <h3 id="modalTitle">Item Details / QR</h3>
-      <label>Product Name <input id="mName" /></label>
-      <label>Quantity <input id="mQuantity" type="number" min="0" /></label>
-      <label>Date <input id="mDate" type="date" /></label>
-      <label>Unit   <div class="unit-toggle">
-          <label><input type="radio" name="unit" value="pcs" checked /> pcs</label>
-          <label><input type="radio" name="unit" value="box" /> box</label>
-          <label><input type="radio" name="unit" value="tub" /> tub</label>
-        </div>
-      </label>
-      <label>Price Per PCS <input id="mPricePCS" type="number" min="0" step="0.01" /></label>
-      <label>Price Per BOX <input id="mPriceBOX" type="number" min="0" step="0.01" /></label>
-      <label>Price Per TUB <input id="mPriceTUB" type="number" min="0" step="0.01" /></label>
+        
+      <div class="form-grid">
+        <label>Product Name <input id="mName" /></label>
+        <label>Category <input id="mCategory" placeholder="e.g. Tools" /></label>
+          
+        <label>Quantity <input id="mQuantity" type="number" min="0" /></label>
+        <label>Date <input id="mDate" type="date" /></label>
+          
+        <label>Unit 
+          <select id="mUnit">
+            <option value="pcs">pcs</option>
+            <option value="box">box</option>
+            <option value="tub">tub</option>
+          </select>
+        </label>
+      </div>
 
-      <div class="modal-actions">
-        <button id="btnGenerateQR" class="btn primary">Generate QR</button>
-        <div id="qrContainer" class="qr-container"></div>
-        <button id="btnSaveItem" class="btn btn-save">Save Item</button>
+      <h4 style="margin: 15px 0 5px 0;">Unit Prices</h4>
+      <div class="form-grid three-cols">
+        <label>Price Per PCS <input id="mPricePCS" type="number" min="0" step="0.01" /></label>
+        <label>Price Per BOX <input id="mPriceBOX" type="number" min="0" step="0.01" /></label>
+        <label>Price Per TUB <input id="mPriceTUB" type="number" min="0" step="0.01" /></label>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+        
+        <button id="btnDeleteItem" class="btn" style="background: #e74c3c; color: white; display: none;">
+           Delete
+        </button>
+
+        <div style="display: flex; gap: 10px;">
+          <button id="btnGenerateQR" class="btn primary">Generate QR</button>
+          <div id="qrContainer" class="qr-container"></div>
+          <button id="btnSaveItem" class="btn btn-save">Save Item</button>
+        </div>
+
       </div>
 
       <div class="row">
-        <button id="modalCancel" class="btn">Cancel</button>
+        <button id="modalCancel" class="btn" style="width:100%">Cancel</button>
       </div>
     </div>
   </div>
@@ -221,7 +251,6 @@
     </div>
   </div>
 
-  <!-- Note type="module" here -->
   <script type="module" src="renderers.js"></script>
 </body>
 </html>

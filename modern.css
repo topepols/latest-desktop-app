@@ -1,275 +1,58 @@
-:root{--bg:#f5f7fb;--accent:#2f80ed;--muted:#6b7280}
-*{box-sizing:border-box;font-family:Inter,Roboto,Arial,Helvetica,sans-serif}
-body{margin:0;background:var(--bg);color:#0f172a}
-.app{display:flex;height:100vh}
-.sidebar{width:220px;padding:20px;background:#0b1220;color:#fff;display:flex;flex-direction:column;justify-content:space-between}
-.brand{font-size:18px;margin-bottom:10px}
-.brand span{color:var(--accent)}
-.nav-item{list-style:none;padding:10px;border-radius:6px;cursor:pointer}
-.nav-item.active,.nav-item:hover{background:rgba(255,255,255,0.06)}
-.sidebar-footer{font-size:12px;color:#cbd5e1}
-.main{flex:1;padding:20px;overflow:auto}
-.view{display:none}
-.view.active-view{display:block}
-.view-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.small-info{display:flex;gap:12px}
-/* Container for the two boxes */
-.cards {
-  display: grid;
-  /* 1fr = "Free Space" (Graph), 350px = Fixed Width (Alerts) */
-  grid-template-columns: 1fr 350px; 
-  gap: 20px;
-  /* Enforce a specific height so they are always the same height */
-  height: 400px; 
-  margin-top: 20px;
+:root {
+  --bg: #f5f7fb;
+  --accent: #2f80ed;
+  --muted: #6b7280;
+  --sidebar-width: 220px;
+  --sidebar-bg: #0b1220;
 }
 
-/* Common Card Styling */
-.card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 12px rgba(15,23,42,0.06);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; /* Prevents content from spilling out */
+* {
+  box-sizing: border-box;
+  font-family: 'Inter', Roboto, Arial, Helvetica, sans-serif;
 }
 
-/* Specific fix for the Graph Card to prevent breaking */
-.card.graph-card {
-  min-width: 0; /* CRITICAL: Prevents grid blowout on resize */
-  position: relative;
-}
-
-/* Ensure the Alerts list scrolls if it gets too long, rather than stretching the box */
-.alerts {
-  overflow-y: auto;
-  flex: 1; /* Fills remaining height of the card */
-  padding-right: 5px;
-}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{padding:8px;border-bottom:1px solid #eef2f7;text-align:left}
-.btn{padding:8px 10px;border-radius:6px;border:0;cursor:pointer}
-.btn.primary{background:var(--accent);color:#fff}
-.login-card{max-width:420px;margin:40px auto;padding:20px;background:#fff;border-radius:8px}
-.login-form label{display:block;margin-bottom:8px}
-.row{display:flex;gap:8px}
-.error{color:#ef4444}
-.modal{position:fixed;left:0;top:0;right:0;bottom:0;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,0.5)}
-.modal.open{display:flex}
-.modal-card{background:#fff;padding:16px;border-radius:8px;min-width:320px}
-.search-bar{padding:8px;border-radius:6px;border:1px solid #d1d5db;margin:12px 0;min-width:220px}
-.unit-toggle{display:flex;gap:10px;align-items:center}
-.alerts{padding-left:16px}
-.table button{margin-right:6px}
-/* Fix to prevent the sidebar button from covering the View Titles */
-.view-header h2 {
-    margin-left: 60px; /* 50px for the button + 10px extra space */
-}
-/* --- Borrowing View Styling --- */
-#view-borrowing {
-  padding: 20px;
-}
-
-#view-borrowing .view-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-#view-borrowing .view-header h2 {
+body {
   margin: 0;
+  background: var(--bg);
+  color: #0f172a;
 }
 
-#view-borrowing .btn {
-  margin-left: 5px;
-  margin-bottom: 5px;
-}
-
-#view-borrowing .card.full {
-  padding: 10px;
-  background-color: #fff;
-  border-radius: 6px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  overflow-x: auto;
-}
-
-#borrowingTable {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-#borrowingTable th,
-#borrowingTable td {
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  text-align: left;
-}
-
-#borrowingTable th {
-  background-color: #f0f0f0;
-}
-
-#borrowingTable tr:nth-child(even) {
-  background-color: #fafafa;
-}
-
-/* Modal Borrowing Form */
-#modalBorrow .modal-card {
-  width: 350px;
-  padding: 20px;
-}
-
-#modalBorrow label {
-  display: block;
-  margin-bottom: 10px;
-}
-
-#modalBorrow select,
-#modalBorrow input {
-  width: 100%;
-  padding: 6px 8px;
-  margin-top: 4px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-/* Unit Toggle in Borrowing Modal */
-.unit-toggle {
+/* ============================
+   APP STRUCTURE
+   ============================ */
+.app {
   display: flex;
-  gap: 15px;
-  margin-top: 5px;
-}
-
-.unit-toggle label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-#modalBorrow .row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 15px;
-}
-/* --- SIDEBAR SETUP (Modified for Sliding) --- */
-.sidebar {
-  /* Use position: fixed to keep it locked to the left edge */
-  position: fixed; 
-  top: 0;
-  /* Start the sidebar off-screen to the left (220px is your width) */
-  left: -220px; 
-  
-  /* Original styles */
-  width: 220px;
   height: 100vh;
-  background: #0b1220; 
-  color: #fff;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 0; /* Use horizontal padding on inner elements */
-  justify-content: space-between;
-  
-  /* CRITICAL: Smooth transition for the 'left' property */
-  transition: left 0.4s ease-out; 
-  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
+  overflow: hidden; /* Prevents double scrollbars */
 }
 
-/* When the JavaScript adds the 'active' class, slide it into view */
-.sidebar.active {
-  left: 0;
-}
-
-/* --- THE TOGGLE BUTTON (Modified to Ride the Sidebar) --- */
-#btnToggleSidebar {
-  /* Make the button position relative to the sidebar container */
-  position: absolute; 
-  
-  /* Position it 'hanging' off the right edge of the sidebar */
-  right: -50px; 
-  top: 15px;
-  
-  /* Styling to match your look */
-  width: 50px;
-  height: 45px;
-  border: none;
-  border-radius: 0 8px 8px 0; 
-  background: var(--accent); /* #2f80ed */
-  color: #fff;
-  font-size: 1.5rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1001; /* Ensure button is always on top */
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-  transition:  0.3s;
-}
-
-/* Optional: Main content pushes over (since you had .main.sidebar-active) */
 .main {
-  transition: margin-left 0.4s ease-out;
-  margin-left: 0;
   flex: 1;
   padding: 20px;
   overflow: auto;
+  transition: margin-left 0.4s ease-out;
+  margin-left: 0;
 }
 
 .main.sidebar-active {
-  margin-left: 220px; /* Pushes content over to match sidebar width */
+  margin-left: var(--sidebar-width);
 }
 
-/* --- LOGIN VIEW CENTERING --- */
-/* Target the login view container specifically */
-#view-login {
-  height: 100vh; /* Full screen height */
-  width: 100%;
-  
-  /* Flexbox magic to center content */
-  align-items: center;     /* Vertical Center */
-  justify-content: center; /* Horizontal Center */
-  
-  /* We keep display:none from the .view class, 
-     but we need to override it when active */
-}
-
-/* When the login view is active, use Flex instead of Block */
-#view-login.active-view {
-  display: flex !important;
-}
-
-/* Remove old margins from the card so it centers freely */
-.login-card {
-  margin: 0; /* No top margin needed */
-  width: 100%;
-  max-width: 400px; /* Keep it nice and compact */
-  
-  /* Optional: Add a nice shadow/border */
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-/* --- SIDEBAR LAYOUT --- */
+/* ============================
+   SIDEBAR (Sliding)
+   ============================ */
 .sidebar {
   position: fixed;
   top: 0;
-  left: -220px;
-  width: 220px;
+  left: calc(var(--sidebar-width) * -1); /* Hidden by default */
+  width: var(--sidebar-width);
   height: 100vh;
-  background: #0b1220;
+  background: var(--sidebar-bg);
   color: #fff;
   z-index: 1000;
-  
-  /* Flexbox setup */
   display: flex;
   flex-direction: column;
   padding: 20px 0;
-  
-  /* REMOVED 'justify-content: space-between' so we can control it manually */
-  
   transition: left 0.4s ease-out;
   box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
 }
@@ -278,34 +61,380 @@ body{margin:0;background:var(--bg);color:#0f172a}
   left: 0;
 }
 
-/* --- NAV ITEMS (The Middle Part) --- */
+/* Sidebar Sections */
+.brand {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 18px;
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.brand span {
+  color: var(--accent);
+}
+
 #navList {
-  /* This makes the list take up all available space between Brand and Footer */
-  flex: 1; 
-  
-  /* This centers the list items vertically inside that space */
+  flex: 1; /* Pushes list to center vertically */
   display: flex;
   flex-direction: column;
   justify-content: center;
-  
-  /* Reset default UL styles */
-  padding: 0;
+  padding: 0 10px;
   margin: 0;
   list-style: none;
 }
 
-/* --- BRAND (Top) --- */
-.brand {
-  flex: 0 0 auto; /* Don't stretch */
-  text-align: center;
-  margin-bottom: 20px; /* Space below title */
+.nav-item {
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 5px;
+  transition: background 0.2s;
 }
 
-/* --- FOOTER (Bottom) --- */
+.nav-item.active,
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .sidebar-footer {
-  flex: 0 0 auto; /* Don't stretch */
-  margin-top: auto; /* Push to bottom just in case */
+  flex: 0 0 auto;
+  margin-top: auto;
   padding: 20px;
   text-align: center;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  color: #cbd5e1;
 }
+
+/* Floating Toggle Button */
+#btnToggleSidebar {
+  position: absolute;
+  right: -50px; /* Hangs off the right edge */
+  top: 15px;
+  width: 50px;
+  height: 45px;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  transition: 0.3s;
+}
+
+/* ============================
+   LOGIN VIEW (Centered)
+   ============================ */
+#view-login {
+  height: 100vh;
+  width: 100%;
+  display: none; /* Default hidden */
+  align-items: center;
+  justify-content: center;
+}
+
+#view-login.active-view {
+  display: flex !important; /* Override block for Flex centering */
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 30px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.login-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+/* ============================
+   VIEWS & DASHBOARD
+   ============================ */
+.view {
+  display: none;
+  padding-bottom: 40px;
+}
+
+.view.active-view {
+  display: block;
+}
+
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Prevent Sidebar Button from covering Title */
+.view-header h2 {
+  margin-left: 60px; 
+}
+
+/* ============================
+   DASHBOARD LAYOUT (Side-by-Side)
+   ============================ */
+
+.cards {
+  display: grid;
+  /* 1fr = takes remaining space (Graph), 320px = fixed width (Alerts) */
+  grid-template-columns: 1fr 320px; 
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start; /* Aligns both cards to the top */
+}
+
+/* Make sure the cards look consistent */
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  height: 100%; /* Makes them fill the grid cell height */
+}
+
+/* Mobile Responsiveness: Stack them if screen is small */
+@media (max-width: 900px) {
+  .cards {
+    grid-template-columns: 1fr; /* Stack vertically on small screens */
+  }
+}
+
+.card.full {
+  height: auto;
+  overflow: auto;
+}
+
+/* Graph Fix */
+.card.graph-card {
+  min-width: 0;
+  position: relative;
+}
+
+/* Alerts List */
+.alerts {
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 5px;
+  padding-left: 0;
+  list-style-position: inside;
+}
+
+/* ============================
+   TABLES & FORMS
+   ============================ */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+}
+
+.table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.search-bar {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  width: 100%;
+  max-width: 300px;
+  margin-bottom: 15px;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.btn:hover { opacity: 0.9; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.btn-save { background: #10b981; color: white; }
+
+/* ============================
+   MODALS & INPUTS (Grid System)
+   ============================ */
+.modal {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(2, 6, 23, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-card {
+  background: #fff;
+  padding: 25px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px; /* Wider for the grid layout */
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+/* --- GRID SYSTEM FOR FORMS --- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2 items per row */
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-grid.three-cols {
+  grid-template-columns: 1fr 1fr 1fr; /* 3 items per row for prices */
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.form-grid input, 
+.form-grid select {
+  padding: 8px 12px;
+  margin-top: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box; /* Crucial for alignment */
+  font-size: 1rem;
+}
+
+/* QR Container */
+.qr-container {
+  margin: 15px 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Modal Buttons */
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* ============================
+   UTILITIES
+   ============================ */
+.row { display: flex; gap: 10px; margin-top: 10px; }
+.error { color: #ef4444; font-size: 0.9rem; margin-top: 10px; }
+.muted { color: var(--muted); }
+.small-info { display: flex; gap: 15px; font-size: 0.9rem; }
+
+
+/* ============================
+   SCROLLABLE BAR CHART STYLES
+   ============================ */
+
+.chart-header-row {
+  display: flex;
+  margin-bottom: 10px;
+  font-size: 0.85em;
+  color: #6b7280; /* Muted gray */
+  padding-bottom: 5px;
+  border-bottom: 1px solid #eee;
+  font-weight: 600;
+}
+
+/* The Container that scrolls */
+.chart-scroll-area {
+  height: 280px;      /* Fixed height ensures scrolling triggers */
+  overflow-y: auto;   /* Enable vertical scroll */
+  padding-right: 10px;
+}
+
+/* Custom Scrollbar */
+.chart-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+.chart-scroll-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.chart-scroll-area::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+/* The Row Layout */
+.chart-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+/* The Item Name (Left Side) */
+.row-label {
+  width: 130px; 
+  text-align: right;
+  padding-right: 15px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Adds "..." if name is too long */
+  font-weight: 500;
+}
+
+/* The Bar Container (Right Side) */
+.bar-container {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  border-left: 1px solid #e5e7eb; /* The vertical axis line */
+  padding-left: 2px;
+}
+
+/* The Actual Colored Bar */
+.bar {
+  height: 24px;
+  background-color: #7cb5ec; /* The Blue from your image */
+  border-radius: 0 3px 3px 0;
+  min-width: 2px;
+  transition: width 0.5s ease;
+}
+
+/* The Number Value */
+.bar-value {
+  margin-left: 10px;
+  font-weight: bold;
+  color: #111;
+  font-size: 0.85em;
+}
+

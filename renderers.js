@@ -106,6 +106,8 @@ function setupNav() {
   };
 }
 
+
+
 // =============================
 // VIEW SWITCHING
 // =============================
@@ -128,7 +130,12 @@ function switchView(view) {
 function openAddItem() {
   currentEditId = null;
   document.getElementById('modalTitle').textContent = 'Add Item';
-  ['mName','mQuantity','mDate','mPricePCS','mPriceBOX','mPriceTUB'].forEach(id => document.getElementById(id).value = '');
+  
+  // 🟢 THIS LINE HIDES THE DELETE BUTTON (Safety):
+  document.getElementById('btnDeleteItem').style.display = 'none';
+
+  ['mName', 'mCategory', 'mQuantity', 'mDate', 'mPricePCS', 'mPriceBOX', 'mPriceTUB'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mUnit').value = 'pcs'; 
   document.getElementById('qrContainer').innerHTML = '';
   document.getElementById('modal').style.display = 'flex';
 }
@@ -147,7 +154,9 @@ window.closeModal = closeModal;
 document.getElementById('btnGenerateQR').onclick = () => {
   const name = document.getElementById('mName').value;
   const date = document.getElementById('mDate').value;
-  const unit = document.querySelector('input[name="unit"]:checked').value;
+  
+  // 🟢 FIX: Get value from the new Dropdown, not the old Radio Buttons
+  const unit = document.getElementById('mUnit').value; 
   
   if (!name || !date) { alert('Fill fields first'); return; }
 
@@ -163,7 +172,12 @@ document.getElementById('btnGenerateQR').onclick = () => {
   const qrContainer = document.getElementById('qrContainer');
   qrContainer.innerHTML = '';
   const canvas = document.createElement('canvas');
-  QRCode.toCanvas(canvas, JSON.stringify(itemData), { width: 200 }, (err) => { if(err) console.error(err); });
+  
+  // Generate the QR
+  QRCode.toCanvas(canvas, JSON.stringify(itemData), { width: 200 }, (err) => { 
+    if(err) console.error(err); 
+  });
+  
   qrContainer.appendChild(canvas);
 };
 
@@ -172,25 +186,50 @@ document.getElementById('btnGenerateQR').onclick = () => {
 // =============================
 document.getElementById('btnSaveItem').onclick = async () => {
   const name = document.getElementById('mName').value;
+  const category = document.getElementById('mCategory').value; 
   const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
   const date = document.getElementById('mDate').value;
-  const unit = document.querySelector('input[name="unit"]:checked').value;
+  const unit = document.getElementById('mUnit').value; // Get the selected unit
   
+  // Get all prices
   const prices = {
     pcs: parseFloat(document.getElementById('mPricePCS').value) || 0,
     box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
     tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
   };
 
-  if (!name || !date) { alert('Fill required fields'); return; }
+  // --- 1. BASIC FIELD CHECKS ---
+  if (!name || !date) { 
+    alert('Please fill in the Name and Date fields.'); 
+    return; 
+  }
 
-  const itemData = { name, quantity, date, unit, prices };
+  // --- 2. PRICE VALIDATION (NEW) ---
+  // This checks the price specifically for the unit you selected.
+  // Example: If you selected "BOX", the "Price BOX" cannot be 0.
+  if (prices[unit] <= 0) {
+    alert(`You selected Unit: "${unit.toUpperCase()}", but the price for ${unit.toUpperCase()} is 0. Please enter a valid price.`);
+    return; // Stops the save process
+  }
+
+  // Optional: Safety check to ensure not ALL prices are zero (if you want to be extra strict)
+  if (prices.pcs <= 0 && prices.box <= 0 && prices.tub <= 0) {
+    alert('All prices are 0. Please add at least one price.');
+    return;
+  }
+
+  // Prepare data to save
+  const itemData = { name, category, quantity, date, unit, prices };
 
   try {
     if (currentEditId) {
+      // Update existing item
       await updateDoc(doc(db, "inventory", currentEditId), itemData);
     } else {
+      // Add new item
       await addDoc(collection(db, "inventory"), itemData);
+      
+      // Log this transaction
       logTransaction(itemData, "NEW ITEM", quantity);
     }
     closeModal();
@@ -203,17 +242,39 @@ document.getElementById('btnSaveItem').onclick = async () => {
 // =============================
 // INVENTORY RENDERING
 // =============================
+document.getElementById('sortInventory').addEventListener('change', renderInventory);
+document.getElementById('sortReports').addEventListener('change', renderReports);
 function renderInventory() {
   const tbody = document.querySelector('#inventoryTable tbody');
   tbody.innerHTML = '';
   
   const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-  const filtered = inventory.filter(item => item.name.toLowerCase().includes(searchTerm));
+  const sortMode = document.getElementById('sortInventory').value; // Get dropdown value
 
+  // 1. Filter first
+  let filtered = inventory.filter(item => item.name.toLowerCase().includes(searchTerm));
+
+  // 2. Then Sort
+  filtered.sort((a, b) => {
+    if (sortMode === 'alpha') {
+      return a.name.localeCompare(b.name);
+    } else if (sortMode === 'qtyLow') {
+      return a.quantity - b.quantity;
+    } else if (sortMode === 'qtyHigh') {
+      return b.quantity - a.quantity;
+    } else if (sortMode === 'dateNew') {
+      return new Date(b.date) - new Date(a.date);
+    } else if (sortMode === 'dateOld') {
+      return new Date(a.date) - new Date(b.date);
+    }
+  });
+
+  // 3. Render
   filtered.forEach((item) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${item.name}</td>
+      <td>${item.category || '-'}</td>
       <td>${item.quantity}</td>
       <td>${item.date}</td>
       <td>
@@ -238,9 +299,16 @@ window.editItem = (id) => {
 
   currentEditId = id;
   document.getElementById('modalTitle').textContent = 'Edit Item';
+
+  // 🟢 THIS LINE MAKES THE DELETE BUTTON APPEAR:
+  document.getElementById('btnDeleteItem').style.display = 'block';
+
   document.getElementById('mName').value = item.name;
+  document.getElementById('mCategory').value = item.category || ''; // 🟢 ADD THIS LINE
   document.getElementById('mQuantity').value = item.quantity;
   document.getElementById('mDate').value = item.date;
+  
+  // ... rest of the code remains the same ...
   
   const unitRadio = document.querySelector(`input[name="unit"][value="${item.unit}"]`);
   if(unitRadio) unitRadio.checked = true;
@@ -339,13 +407,35 @@ function renderReports() {
   const tbody = document.querySelector('#reportsTable tbody');
   tbody.innerHTML = '';
   
-  reports.forEach(log => {
+  const sortMode = document.getElementById('sortReports').value; // Get dropdown value
+
+  // Create a copy of reports array to sort safely
+  let sortedReports = [...reports];
+
+  // Sort Logic
+  sortedReports.sort((a, b) => {
+    if (sortMode === 'dateNew') {
+      // Sort by timestamp if available, otherwise by date string
+      const dateA = a.timestamp ? a.timestamp.seconds : new Date(a.date).getTime();
+      const dateB = b.timestamp ? b.timestamp.seconds : new Date(b.date).getTime();
+      return dateB - dateA;
+    } else if (sortMode === 'dateOld') {
+      const dateA = a.timestamp ? a.timestamp.seconds : new Date(a.date).getTime();
+      const dateB = b.timestamp ? b.timestamp.seconds : new Date(b.date).getTime();
+      return dateA - dateB;
+    } else if (sortMode === 'action') {
+      return a.type.localeCompare(b.type);
+    }
+  });
+  
+  sortedReports.forEach(log => {
     const totalValue = (log.quantity || 0) * (log.unitPrice || 0);
     
     let color = '#333';
     if(log.type === 'RESTOCK') color = '#2ecc71';
     if(log.type === 'GET/SOLD') color = '#e74c3c';
     if(log.type === 'NEW ITEM') color = '#3498db';
+    if(log.type === 'DELETED') color = '#95a5a6';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -362,9 +452,51 @@ function renderReports() {
 // =============================
 // DASHBOARD
 // =============================
-let stockChart = null;
 
+// 1. Helper function to build the scrollable HTML chart
+function renderScrollableChart() {
+  const container = document.getElementById('scrollableChart');
+  if (!container) return;
+
+  container.innerHTML = ''; // Clear previous content
+
+  if (!inventory || inventory.length === 0) {
+    container.innerHTML = '<p class="muted" style="text-align:center; padding-top:20px;">No items in stock.</p>';
+    return;
+  }
+
+  // A. Sort by Quantity (Highest first)
+  const sortedItems = [...inventory].sort((a, b) => b.quantity - a.quantity);
+
+  // B. Find the highest quantity to calculate percentages
+  const maxQty = Math.max(...sortedItems.map(item => item.quantity)) || 100;
+
+  // C. Generate HTML
+  let html = '';
+  sortedItems.forEach(item => {
+    // Calculate width percentage
+    const widthPercent = (item.quantity / maxQty) * 100;
+    
+    // Logic: Blue normally (#7cb5ec), Red if low stock (#e74c3c)
+    const barColor = item.quantity < 5 ? '#e74c3c' : '#7cb5ec';
+
+    html += `
+      <div class="chart-row">
+        <div class="row-label" title="${item.name}">${item.name}</div>
+        <div class="bar-container">
+          <div class="bar" style="width: ${widthPercent}%; background-color: ${barColor};"></div>
+          <span class="bar-value">${item.quantity}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// 2. Main Dashboard Render Function
 function renderDashboard() {
+  // Update Top Stats
   document.getElementById('totalItems').textContent = inventory.length;
 
   const totalValue = inventory.reduce((sum, item) => {
@@ -374,48 +506,26 @@ function renderDashboard() {
   
   document.getElementById('totalExpenses').textContent = `₱${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
 
+  // Update Low Stock Alerts (Left Card)
   const alertsList = document.getElementById('alertsList');
   alertsList.innerHTML = '';
   inventory.filter(x => x.quantity < 5).forEach(item => {
     const li = document.createElement('li');
     li.textContent = `${item.name} is low (${item.quantity} ${item.unit})`;
+    li.style.color = '#e74c3c';
     alertsList.appendChild(li);
   });
 
-  const ctx = document.getElementById('stockChart').getContext('2d');
-  if(stockChart) stockChart.destroy();
-
-  const backgroundColors = inventory.map(item => {
-    if (item.quantity < 5) return '#e74c3c';
-    if (item.unit === 'pcs') return '#3498db';
-    if (item.unit === 'box') return '#f1c40f';
-    return '#2ecc71';
-  });
-
-  stockChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: inventory.map(x => `${x.name} (${x.unit})`),
-      datasets: [{
-        label: 'Quantity',
-        data: inventory.map(x => x.quantity),
-        backgroundColor: backgroundColors,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
+  // Render the new Scrollable Chart (Right Card)
+  renderScrollableChart();
 }
 
 // =============================
 // BULK / RAPID ADJUSTMENT
 // =============================
 document.getElementById('btnOpenBulk').onclick = () => {
+  document.querySelector('#bulkTable tbody').innerHTML = ''; 
+  
   renderBulkTable();
   document.getElementById('bulkModal').style.display = 'flex';
 };
@@ -425,17 +535,39 @@ document.getElementById('btnBulkClose').onclick = () => {
 
 function renderBulkTable() {
   const tbody = document.querySelector('#bulkTable tbody');
+  
+  // 1. CAPTURE CURRENT INPUT VALUES (The Fix)
+  // Before we wipe the table, we look at every input and save what number the user typed.
+  const currentValues = {};
+  const existingInputs = tbody.querySelectorAll('input[type="number"]');
+  existingInputs.forEach(input => {
+    // Save the value using the Item ID as the key
+    currentValues[input.id] = input.value;
+  });
+
+  // 2. Clear the table
   tbody.innerHTML = '';
 
+  // 3. Re-build the table
   inventory.forEach((item) => {
     const tr = document.createElement('tr');
+    
+    // Generate the ID for this input
+    const inputId = `bulk-qty-${item.id}`;
+    
+    // Check if we had a saved value for this item, otherwise default to 1
+    // This ensures that if you typed "5", it stays "5" after the refresh.
+    const valToRender = currentValues[inputId] || 1;
+
     tr.innerHTML = `
       <td style="font-weight:bold;">${item.name} <span style="font-size:0.8em; color:#666;">(${item.unit})</span></td>
       <td style="font-size:1.1em; text-align:center;">${item.quantity}</td>
       <td>
         <div style="display:flex; justify-content:center; gap:5px;">
            <button class="btn" onclick="window.adjustBulkInput('${item.id}', -1)" style="padding:2px 8px;">-</button>
-           <input id="bulk-qty-${item.id}" type="number" value="1" min="1" style="width:50px; text-align:center;">
+           
+           <input id="${inputId}" type="number" value="${valToRender}" min="1" style="width:50px; text-align:center;">
+           
            <button class="btn" onclick="window.adjustBulkInput('${item.id}', 1)" style="padding:2px 8px;">+</button>
         </div>
       </td>
@@ -476,9 +608,9 @@ window.processBulkAction = async (id, action) => {
     if (amount > item.quantity) { alert("Not enough stock!"); return; }
     newQty -= amount;
     await updateDoc(doc(db, "inventory", id), { quantity: newQty });
-    logTransaction(item, "SOLD", amount);
+    logTransaction(item, "GET/SOLD", amount);
   }
-  input.value = 1;
+  
 };
 
 // =============================
@@ -508,3 +640,13 @@ document.getElementById('btnExportCsv').onclick = () => {
   a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
 };
+
+document.getElementById('btnDeleteItem').onclick = async () => {
+  if (!currentEditId) return;
+
+  if (confirm("Are you sure you want to permanently delete this item?")) {
+    await deleteDoc(doc(db, "inventory", currentEditId));
+    closeModal();
+  }
+};
+
