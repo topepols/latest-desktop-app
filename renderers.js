@@ -366,13 +366,13 @@ document.getElementById('btnActionRemove').onclick = async () => {
   
   if (adjustAmount >= item.quantity) {
     if(confirm(`This will remove "${item.name}" completely. Proceed?`)) {
-      logTransaction(item, "GET/SOLD", item.quantity);
+      logTransaction(item, "SOLD", item.quantity);
       await deleteDoc(doc(db, "inventory", adjustId));
     }
   } else {
     const newQty = item.quantity - adjustAmount;
     await updateDoc(doc(db, "inventory", adjustId), { quantity: newQty });
-    logTransaction(item, "GET/SOLD", adjustAmount);
+    logTransaction(item, "SOLD", adjustAmount);
   }
   
   document.getElementById('adjustModal').style.display = 'none';
@@ -433,7 +433,7 @@ function renderReports() {
     
     let color = '#333';
     if(log.type === 'RESTOCK') color = '#2ecc71';
-    if(log.type === 'GET/SOLD') color = '#e74c3c';
+    if(log.type === 'SOLD') color = '#e74c3c';
     if(log.type === 'NEW ITEM') color = '#3498db';
     if(log.type === 'DELETED') color = '#95a5a6';
 
@@ -608,7 +608,7 @@ window.processBulkAction = async (id, action) => {
     if (amount > item.quantity) { alert("Not enough stock!"); return; }
     newQty -= amount;
     await updateDoc(doc(db, "inventory", id), { quantity: newQty });
-    logTransaction(item, "GET/SOLD", amount);
+    logTransaction(item, "SOLD", amount);
   }
   
 };
