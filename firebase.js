@@ -1,14 +1,16 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
+// --- UPDATED CONFIGURATION (JDGHUB) ---
+// This connects the Desktop app to the same database as the Mobile app.
 const firebaseConfig = {
-  apiKey: "AIzaSyDnv01fHrHKPzDWLQCjolEHclIiapBK9vI",
-  authDomain: "electron-6a45b.firebaseapp.com",
-  projectId: "electron-6a45b",
-  storageBucket: "electron-6a45b.firebasestorage.app",
-  messagingSenderId: "173561788996",
-  appId: "1:173561788996:web:ed601085cc929b1afb5a11",
-  measurementId: "G-0RJH0GK69L"
+  apiKey: "AIzaSyB8O8xLHhI7Rslo2ukdj2iS0LK8BczyLTU",
+  authDomain: "jdghub.firebaseapp.com",
+  projectId: "jdghub",
+  storageBucket: "jdghub.firebasestorage.app",
+  messagingSenderId: "20812849661",
+  appId: "1:20812849661:web:6cfb135e6dc2f375213994",
+  measurementId: "G-65ERZW6077"
 };
 
 const app = initializeApp(firebaseConfig);
