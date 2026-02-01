@@ -20,8 +20,9 @@ let inventory = [];
 let reports = [];
 let requests = []; 
 let accountsData = []; 
+let auditLogs = []; 
 let currentEditId = null; 
-let currentPassId = null; // NEW: Track ID for password change
+let currentPassId = null;
 let currentUser = null;
 let currentRequestFilter = 'ALL';
 let currentPage = 1;
@@ -49,24 +50,33 @@ const getTimestampMs = (obj) => {
     return new Date(obj).getTime();
 };
 
+// --- AUDIT LOGGER ---
+const logAudit = async (action, details) => {
+    try {
+        await addDoc(collection(db, "audit_logs"), {
+            actor: currentUser || "Unknown",
+            action: action,
+            details: details,
+            timestamp: serverTimestamp()
+        });
+    } catch (e) { console.error("Audit Error:", e); }
+};
+
 // =============================
 // FIRESTORE LISTENERS
 // =============================
 function initListeners() {
-  // 1. Inventory
   onSnapshot(query(collection(db, "inventory"), orderBy("name")), (snap) => {
     inventory = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderInventory();
     renderDashboard(); 
   });
 
-  // 2. Reports
   onSnapshot(query(collection(db, "reports"), orderBy("timestamp", "desc")), (snap) => {
     reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderReports();
   });
 
-  // 3. Requests
   onSnapshot(query(collection(db, "requests"), orderBy("timestamp", "desc")), (snap) => {
     requests = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderRequests(); 
@@ -74,10 +84,14 @@ function initListeners() {
     renderDashboard(); 
   });
 
-  // 4. Accounts
   onSnapshot(query(collection(db, "accounts"), orderBy("name")), (snap) => {
     accountsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderAccounts();
+  });
+
+  onSnapshot(query(collection(db, "audit_logs"), orderBy("timestamp", "desc")), (snap) => {
+    auditLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderAuditLogs();
   });
 }
 
@@ -97,30 +111,34 @@ window.handleLogin = () => {
     document.getElementById('currentUserLabel').textContent = u;
     document.getElementById('appSidebar').style.display = 'block'; 
     switchView('dashboard');
-    setupNav();
+    // setupNav(); // Logic moved below to run globally
     document.getElementById('loginUsername').value = '';
     document.getElementById('loginPassword').value = '';
+    
+    logAudit("LOGIN", `User ${u} logged in.`);
   } else {
     document.getElementById('loginError').textContent = 'Invalid credentials';
   }
 };
 document.getElementById('btnLogin').onclick = window.handleLogin;
 
-function setupNav() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.onclick = () => {
-      if(item.id === 'logoutBtn') { window.location.reload(); return; }
-      const view = item.getAttribute('data-view');
-      if (view) switchView(view);
+// --- FIXED NAV LOGIC (Runs Immediately) ---
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.onclick = () => {
+    if(item.id === 'logoutBtn') { window.location.reload(); return; }
+    const view = item.getAttribute('data-view');
+    if (view) switchView(view);
+  };
+});
+
+const toggleBtn = document.getElementById('btnToggleSidebar');
+if(toggleBtn) {
+    toggleBtn.onclick = () => {
+      const sidebar = document.getElementById('appSidebar');
+      const main = document.querySelector('.main');
+      if(sidebar) sidebar.classList.toggle('active');
+      if(main) main.classList.toggle('sidebar-active');
     };
-  });
-  const toggleBtn = document.getElementById('btnToggleSidebar');
-  if(toggleBtn) {
-      toggleBtn.onclick = () => {
-        document.getElementById('appSidebar').classList.toggle('active');
-        document.querySelector('.main').classList.toggle('sidebar-active');
-      };
-  }
 }
 
 function switchView(view) {
@@ -137,12 +155,12 @@ function switchView(view) {
   if(view === 'requests') renderRequests(); 
   if(view === 'reports') renderReports();
   if(view === 'accounts') renderAccounts();
+  if(view === 'audit') renderAuditLogs();
 }
 
 // =============================
-// ACCOUNTS MANAGEMENT (UPDATED)
+// ACCOUNTS MANAGEMENT
 // =============================
-
 function renderAccounts() {
     const tbody = document.querySelector('#accountsTable tbody');
     if(!tbody) return;
@@ -158,7 +176,6 @@ function renderAccounts() {
 
         const roleColor = acc.role === 'owner' ? 'role-owner' : (acc.role === 'manager' ? 'role-manager' : 'role-employee');
 
-        // Added Change Password Button (Yellow Key)
         tr.innerHTML = `
             <td>${avatarHtml}</td>
             <td style="font-weight:bold;">${acc.name}</td>
@@ -172,7 +189,7 @@ function renderAccounts() {
                         🔑 Pass
                     </button>
                     <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px; font-size:0.8em;" 
-                        onclick="window.deleteAccount('${acc.id}')">
+                        onclick="window.deleteAccount('${acc.id}', '${acc.name}')">
                         Delete
                     </button>
                 </div>
@@ -182,7 +199,6 @@ function renderAccounts() {
     });
 }
 
-// --- NEW: CHANGE PASSWORD LOGIC ---
 window.openChangePassword = (id, name) => {
     currentPassId = id;
     document.getElementById('passAccountName').textContent = name;
@@ -192,24 +208,15 @@ window.openChangePassword = (id, name) => {
 
 document.getElementById('btnConfirmChangePass').onclick = async () => {
     const newPass = document.getElementById('newPasswordInput').value;
-    if(!newPass || newPass.length < 4) {
-        alert("Password must be at least 4 characters.");
-        return;
-    }
-    
+    if(!newPass || newPass.length < 4) { alert("Password too short."); return; }
     try {
-        await updateDoc(doc(db, "accounts", currentPassId), {
-            password: newPass
-        });
-        alert("Password updated successfully!");
+        await updateDoc(doc(db, "accounts", currentPassId), { password: newPass });
+        logAudit("CHANGE_PASS", `Updated password for user ID: ${currentPassId}`);
+        alert("Password updated!");
         document.getElementById('changePassModal').style.display = 'none';
-    } catch(e) {
-        console.error(e);
-        alert("Error updating password: " + e.message);
-    }
+    } catch(e) { console.error(e); alert("Error updating password."); }
 };
 
-// Standard Account Functions
 document.getElementById('btnOpenAddAccount').onclick = () => {
     document.getElementById('accName').value = '';
     document.getElementById('accUsername').value = '';
@@ -222,9 +229,7 @@ document.getElementById('btnOpenAddAccount').onclick = () => {
     document.getElementById('accountModal').style.display = 'flex';
 };
 
-document.getElementById('btnCancelAccount').onclick = () => {
-    document.getElementById('accountModal').style.display = 'none';
-};
+document.getElementById('btnCancelAccount').onclick = () => { document.getElementById('accountModal').style.display = 'none'; };
 
 document.getElementById('accImageInput').onchange = async (e) => {
     const file = e.target.files[0];
@@ -246,7 +251,7 @@ document.getElementById('btnSaveAccount').onclick = async () => {
     const role = document.getElementById('accRole').value;
     const fileInput = document.getElementById('accImageInput');
 
-    if(!name || !username || !password) { alert("Name, Username, Password required."); return; }
+    if(!name || !username || !password) { alert("Fields required."); return; }
     if(accountsData.some(a => a.username === username)) { alert("Username taken."); return; }
 
     let imageUri = "";
@@ -258,20 +263,440 @@ document.getElementById('btnSaveAccount').onclick = async () => {
         await addDoc(collection(db, "accounts"), {
             name, username, position, password, role, imageUri, createdAt: serverTimestamp()
         });
+        logAudit("CREATE_ACCOUNT", `Created ${role}: ${username}`);
         alert("Account Created!");
         document.getElementById('accountModal').style.display = 'none';
     } catch(e) { console.error(e); alert("Error creating account."); }
 };
 
-window.deleteAccount = async (id) => {
+window.deleteAccount = async (id, name) => {
     if(confirm("Delete this account?")) {
-        try { await deleteDoc(doc(db, "accounts", id)); } catch(e) { alert("Error deleting."); }
+        try { 
+            await deleteDoc(doc(db, "accounts", id)); 
+            logAudit("DELETE_ACCOUNT", `Deleted user: ${name}`);
+        } catch(e) { alert("Error deleting."); }
     }
 };
 
+// =============================
+// AUDIT LOGS
+// =============================
+function renderAuditLogs() {
+    const tbody = document.querySelector('#auditTable tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+
+    const searchTerm = document.getElementById('auditSearch') ? document.getElementById('auditSearch').value.toLowerCase() : '';
+    const filtered = auditLogs.filter(log => 
+        log.action.toLowerCase().includes(searchTerm) || 
+        log.details.toLowerCase().includes(searchTerm) ||
+        log.actor.toLowerCase().includes(searchTerm)
+    );
+
+    filtered.forEach(log => {
+        const tr = document.createElement('tr');
+        const timeStr = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+        let actionColor = '#333';
+        if(log.action.includes('DELETE')) actionColor = '#e74c3c';
+        if(log.action.includes('CREATE')) actionColor = '#27ae60';
+        
+        tr.innerHTML = `
+            <td style="font-size:0.9em; color:#7f8c8d;">${timeStr}</td>
+            <td style="font-weight:bold;">${log.actor}</td>
+            <td style="color:${actionColor}; font-weight:bold;">${log.action}</td>
+            <td>${log.details}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+if(document.getElementById('auditSearch')) {
+    document.getElementById('auditSearch').addEventListener('input', renderAuditLogs);
+}
+
+if(document.getElementById('btnExportAudit')) {
+    document.getElementById('btnExportAudit').onclick = () => {
+        let csv = 'Time,Actor,Action,Details\n';
+        auditLogs.forEach(x => {
+            const time = x.timestamp ? new Date(x.timestamp.seconds * 1000).toLocaleString() : '';
+            csv += `${time},${x.actor},${x.action},"${x.details.replace(/"/g, '""')}"\n`;
+        });
+        const blob = new Blob([csv], {type:'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `AuditLog.csv`;
+        a.click();
+    };
+}
 
 // =============================
-// DASHBOARD & OTHER LOGIC (UNCHANGED)
+// INVENTORY LOGIC (FIXED)
+// =============================
+function openAddItem() {
+  currentEditId = null;
+  document.getElementById('modalTitle').textContent = 'Add Item';
+  if(document.getElementById('btnDeleteItem')) document.getElementById('btnDeleteItem').style.display = 'none';
+  
+  ['mName', 'mCategory', 'mQuantity', 'mPricePCS', 'mPriceBOX', 'mPriceTUB', 'mDescription'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.value = '';
+  });
+  
+  if(document.getElementById('mType')) document.getElementById('mType').value = 'CONSUMABLE';
+
+  document.getElementById('mImageFile').value = '';
+  const preview = document.getElementById('mImagePreview');
+  preview.classList.remove('show');
+  preview.src = '';
+  document.getElementById('mUnit').value = 'pcs'; 
+  document.getElementById('qrContainer').innerHTML = '';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+window.openAddItem = openAddItem;
+window.closeModal = closeModal;
+
+window.viewItem = (id) => {
+    const item = inventory.find(x => x.id === id);
+    if(!item) return;
+    document.getElementById('viewItemTitle').textContent = item.name;
+    document.getElementById('viewItemDesc').textContent = item.description || "No description provided.";
+    const img = document.getElementById('viewItemImage');
+    const noImg = document.getElementById('viewItemNoImage');
+    if (item.imageUrl) {
+        img.src = item.imageUrl; img.style.display = 'block'; noImg.style.display = 'none';
+    } else {
+        img.style.display = 'none'; noImg.style.display = 'block';
+    }
+    document.getElementById('viewItemModal').style.display = 'flex';
+};
+
+window.editItem = (id) => {
+  const item = inventory.find(x => x.id === id);
+  if(!item) return;
+  currentEditId = id;
+  document.getElementById('modalTitle').textContent = 'Edit Item';
+  document.getElementById('btnDeleteItem').style.display = 'block';
+
+  document.getElementById('mName').value = item.name;
+  document.getElementById('mCategory').value = item.category || '';
+  if(document.getElementById('mType')) document.getElementById('mType').value = item.type || 'CONSUMABLE';
+  
+  document.getElementById('mQuantity').value = item.quantity;
+  document.getElementById('mDescription').value = item.description || '';
+  
+  const preview = document.getElementById('mImagePreview');
+  if(item.imageUrl) { preview.src = item.imageUrl; preview.classList.add('show'); } 
+  else { preview.classList.remove('show'); preview.src = ''; }
+  
+  document.getElementById('mUnit').value = item.unit; 
+  document.getElementById('mPricePCS').value = item.prices.pcs;
+  document.getElementById('mPriceBOX').value = item.prices.box;
+  document.getElementById('mPriceTUB').value = item.prices.tub;
+  
+  document.getElementById('modal').style.display = 'flex';
+};
+
+document.getElementById('btnSaveItem').onclick = async () => {
+  const name = document.getElementById('mName').value;
+  const type = document.getElementById('mType') ? document.getElementById('mType').value : 'CONSUMABLE';
+  const category = document.getElementById('mCategory').value; 
+  const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
+  
+  const unit = document.getElementById('mUnit').value; 
+  const description = document.getElementById('mDescription').value;
+  const imageFile = document.getElementById('mImageFile').files[0];
+  const prices = {
+    pcs: parseFloat(document.getElementById('mPricePCS').value) || 0,
+    box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
+    tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
+  };
+
+  if (!name) { alert('Name is required.'); return; }
+
+  let imageUrl = null;
+  if (imageFile) { try { imageUrl = await toBase64(imageFile); } catch(e) { alert(e.message); return; } }
+
+  const itemData = { 
+      name, 
+      type: type, 
+      category, quantity, unit, prices, description, 
+      date: new Date().toISOString().split('T')[0] // AUTO DATE
+  };
+  
+  if (imageUrl) itemData.imageUrl = imageUrl;
+  else if (currentEditId) {
+      const existing = inventory.find(i => i.id === currentEditId);
+      if(existing && existing.imageUrl) itemData.imageUrl = existing.imageUrl;
+  }
+
+  try {
+    if (currentEditId) {
+        await updateDoc(doc(db, "inventory", currentEditId), itemData);
+        logAudit("UPDATE ITEM", `Updated item: ${name} (${type})`);
+    } else { 
+        await addDoc(collection(db, "inventory"), itemData); 
+        await addDoc(collection(db, "reports"), {
+            name: itemData.name, type: "NEW ITEM", quantity: itemData.quantity,
+            date: new Date().toISOString().split('T')[0], unitPrice: 0, prices: itemData.prices,
+            timestamp: serverTimestamp()
+        });
+        logAudit("CREATE ITEM", `Created item: ${name} (${type})`);
+    }
+    closeModal();
+  } catch (e) { console.error(e); alert("Error saving item: " + e.message); }
+};
+
+document.getElementById('sortInventory').addEventListener('change', renderInventory);
+function renderInventory() {
+  const tbody = document.querySelector('#inventoryTable tbody');
+  tbody.innerHTML = '';
+  const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+  const sortMode = document.getElementById('sortInventory').value;
+  
+  let filtered = inventory.filter(item => item.name.toLowerCase().includes(searchTerm));
+  
+  filtered.sort((a, b) => {
+    if (sortMode === 'type') return (b.type || '').localeCompare(a.type || '');
+    if (sortMode === 'alpha') return a.name.localeCompare(b.name);
+    if (sortMode === 'qtyLow') return a.quantity - b.quantity;
+    if (sortMode === 'qtyHigh') return b.quantity - a.quantity;
+    if (sortMode === 'dateNew') return new Date(b.date) - new Date(a.date);
+    return 0;
+  });
+
+  filtered.forEach((item) => {
+    const tr = document.createElement('tr');
+    
+    let typeBadge = `<span style="background:#95a5a6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">?</span>`;
+    if (item.type === 'EQUIPMENT') typeBadge = `<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">🔧 EQUIP</span>`;
+    if (item.type === 'CONSUMABLE') typeBadge = `<span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">🔩 CONSUM</span>`;
+
+    const unitKey = (item.unit || 'pcs').toLowerCase(); 
+    const unitPrice = item.prices ? (item.prices[unitKey] || 0) : 0;
+
+    tr.innerHTML = `
+      <td>${typeBadge}</td>
+      <td style="font-weight:bold; color:#2c3e50;">${item.name}</td>
+      <td>${item.category || '-'}</td>
+      <td style="font-size:1.1em;">${item.quantity} <small style="color:#7f8c8d;">${item.unit}</small></td>
+      <td><small style="font-weight:bold; color:#27ae60;">${item.unit.toUpperCase()}: ${formatCurrency(unitPrice)}</small></td>
+      <td>
+        <div style="display: flex; gap: 5px;">
+            <button class="btn" style="background:#34495e; color:white; padding: 5px 10px;" onclick="window.viewItem('${item.id}')">👁️</button>
+            <button class="btn" onclick="window.editItem('${item.id}')">Edit</button>
+            <button class="btn" style="background:#2ecc71; color:white;" onclick="window.openAdjust('${item.id}')">Adj</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+document.getElementById('inventorySearch').addEventListener('input', renderInventory);
+
+// Adjust Modal
+let adjustId = null; let adjustAmount = 1;
+window.openAdjust = (id) => {
+  const item = inventory.find(x => x.id === id); if(!item) return;
+  adjustId = id; adjustAmount = 1;
+  document.getElementById('adjustName').textContent = item.name;
+  document.getElementById('adjustCurrentStock').textContent = item.quantity;
+  document.getElementById('adjustInput').value = adjustAmount;
+  document.getElementById('adjustModal').style.display = 'flex';
+};
+document.getElementById('btnAdjPlus').onclick = () => { adjustAmount++; document.getElementById('adjustInput').value = adjustAmount; };
+document.getElementById('btnAdjMinus').onclick = () => { if (adjustAmount > 1) adjustAmount--; document.getElementById('adjustInput').value = adjustAmount; };
+
+document.getElementById('btnActionAdd').onclick = async () => {
+  if (!adjustId) return;
+  const item = inventory.find(x => x.id === adjustId);
+  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(adjustAmount) });
+  await addDoc(collection(db, "reports"), {
+    name: item.name, type: "RESTOCK", quantity: adjustAmount,
+    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
+    timestamp: serverTimestamp()
+  });
+  logAudit("RESTOCK", `Added ${adjustAmount} to ${item.name}`);
+  document.getElementById('adjustModal').style.display = 'none';
+};
+document.getElementById('btnActionRemove').onclick = async () => {
+  if (!adjustId) return;
+  const item = inventory.find(x => x.id === adjustId);
+  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(-adjustAmount) });
+  await addDoc(collection(db, "reports"), {
+    name: item.name, type: "SOLD", quantity: adjustAmount,
+    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
+    timestamp: serverTimestamp()
+  });
+  logAudit("REMOVE", `Removed ${adjustAmount} from ${item.name}`);
+  document.getElementById('adjustModal').style.display = 'none';
+};
+document.getElementById('btnAdjustCancel').onclick = () => { document.getElementById('adjustModal').style.display = 'none'; };
+
+// Bulk Action
+document.getElementById('btnOpenBulk').onclick = () => {
+  document.querySelector('#bulkTable tbody').innerHTML = ''; 
+  renderBulkTable(); document.getElementById('bulkModal').style.display = 'flex';
+};
+document.getElementById('btnBulkClose').onclick = () => { document.getElementById('bulkModal').style.display = 'none'; };
+
+function renderBulkTable() {
+  const tbody = document.querySelector('#bulkTable tbody');
+  const existingInputs = tbody.querySelectorAll('input[type="number"]');
+  const currentValues = {}; existingInputs.forEach(input => currentValues[input.id] = input.value);
+  
+  tbody.innerHTML = '';
+  inventory.forEach((item) => {
+    const tr = document.createElement('tr');
+    const inputId = `bulk-qty-${item.id}`;
+    const valToRender = currentValues[inputId] || 1;
+    tr.innerHTML = `
+      <td style="font-weight:bold;">${item.name} <span style="font-size:0.8em; color:#666;">(${item.unit})</span></td>
+      <td style="font-size:1.1em; text-align:center;">${item.quantity}</td>
+      <td>
+        <div style="display:flex; justify-content:center; gap:5px;">
+           <button class="btn" onclick="window.adjustBulkInput('${item.id}', -1)" style="padding:2px 8px;">-</button>
+           <input id="${inputId}" type="number" value="${valToRender}" min="1" style="width:50px; text-align:center;">
+           <button class="btn" onclick="window.adjustBulkInput('${item.id}', 1)" style="padding:2px 8px;">+</button>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex; gap:5px; justify-content:center;">
+          <button class="btn" style="background:#2ecc71; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'add')">Add</button>
+          <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'remove')">Sold</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+window.adjustBulkInput = (id, change) => {
+  const input = document.getElementById(`bulk-qty-${id}`);
+  let val = parseInt(input.value) || 0; val += change; if(val < 1) val = 1; input.value = val;
+};
+window.processBulkAction = async (id, action) => {
+  const item = inventory.find(x => x.id === id); const input = document.getElementById(`bulk-qty-${id}`);
+  const amount = parseInt(input.value) || 0; if (amount <= 0) return;
+  const ref = doc(db, "inventory", id);
+  
+  if (action === 'add') { 
+      await updateDoc(ref, { quantity: increment(amount) }); 
+      await addDoc(collection(db, "reports"), {
+        name: item.name, type: "RESTOCK", quantity: amount,
+        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
+        timestamp: serverTimestamp()
+      });
+      logAudit("BULK_RESTOCK", `Added ${amount} to ${item.name}`);
+  } else { 
+      await updateDoc(ref, { quantity: increment(-amount) }); 
+      await addDoc(collection(db, "reports"), {
+        name: item.name, type: "SOLD", quantity: amount,
+        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
+        timestamp: serverTimestamp()
+      });
+      logAudit("BULK_REMOVE", `Removed ${amount} from ${item.name}`);
+  }
+};
+
+document.getElementById('btnAddItem').onclick = openAddItem;
+document.getElementById('modalCancel').onclick = closeModal;
+
+if(document.getElementById('sortReports')) {
+    document.getElementById('sortReports').addEventListener('change', renderReports);
+}
+
+function renderReports() {
+  const tbody = document.querySelector('#reportsTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  
+  let sortedReports = [...reports];
+  const sortMode = document.getElementById('sortReports') ? document.getElementById('sortReports').value : 'dateNew';
+
+  sortedReports.sort((a, b) => {
+    const timeA = getTimestampMs(a.timestamp || a.date);
+    const timeB = getTimestampMs(b.timestamp || b.date);
+    return sortMode === 'dateNew' ? timeB - timeA : timeA - timeB;
+  });
+  
+  sortedReports.forEach(log => {
+    const totalValue = (log.quantity || 0) * (log.unitPrice || 0);
+    let color = '#333';
+    if(log.type === 'RESTOCK') color = '#2ecc71';
+    if(log.type === 'SOLD') color = '#e74c3c';
+    if(log.type === 'NEW ITEM') color = '#3498db';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${log.name}</td>
+      <td style="color:${color}; font-weight:bold;">${log.type}</td>
+      <td>${log.quantity}</td>
+      <td>${log.date}</td>
+      <td>${formatCurrency(totalValue)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btnPrint').onclick = () => { window.print(); };
+
+document.getElementById('btnExportCsv').onclick = () => {
+  let csv = 'Product Name,Action,Quantity,Date,Value\n';
+  reports.forEach(x => {
+    const val = (x.quantity || 0) * (x.unitPrice || 0);
+    const cleanName = `"${x.name.replace(/"/g, '""')}"`;
+    csv += `${cleanName},${x.type},${x.quantity},${x.date},${val.toFixed(2)}\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+};
+
+document.getElementById('btnDeleteItem').onclick = async () => {
+  if (!currentEditId) return;
+  if (confirm("Are you sure you want to permanently delete this item?")) {
+    try {
+      const item = inventory.find(i => i.id === currentEditId);
+      await deleteDoc(doc(db, "inventory", currentEditId));
+      logAudit("DELETE_ITEM", `Deleted item: ${item ? item.name : currentEditId}`);
+      closeModal();
+    } catch (e) {
+      console.error("Error deleting document: ", e);
+      alert("Error deleting item.");
+    }
+  }
+};
+
+// =============================
+// NEW: MISSING RENDER FUNCTION ADDED
+// =============================
+function renderFlatRequestList(tbody, items) {
+    items.forEach(req => {
+        const tr = document.createElement('tr');
+        let color = '#f39c12';
+        if(req.status === 'APPROVED') color = '#27ae60';
+        if(req.status === 'DECLINED') color = '#c0392b';
+        if(req.status === 'RETURNED') color = '#3498db'; // Added RETURNED Color
+        
+        const dateStr = req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleDateString() : 'Syncing...';
+
+        tr.innerHTML = `
+          <td><strong>${req.itemName}</strong> <br><small style="color:#777;">${req.type || ''}</small></td>
+          <td>${req.requestorName}</td>
+          <td>${req.quantity} ${req.unit}</td>
+          <td>${dateStr}</td>
+          <td><span style="color:${color}; font-weight:bold;">${req.status}</span></td>
+          <td>-</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// =============================
+// DASHBOARD
 // =============================
 function renderDashboard() {
   document.getElementById('totalItems').textContent = inventory.length;
@@ -339,7 +764,7 @@ function renderScrollableChart() {
 }
 
 // =============================
-// REQUESTS MANAGEMENT (UNCHANGED)
+// REQUESTS MANAGEMENT
 // =============================
 window.setRequestFilter = (filter) => {
   currentRequestFilter = filter;
@@ -492,25 +917,6 @@ function renderGroupedRequests(tbody, groups) {
   });
 }
 
-function renderFlatRequestList(tbody, items) {
-    items.forEach(req => {
-        const tr = document.createElement('tr');
-        let color = '#f39c12';
-        if(req.status === 'APPROVED') color = '#27ae60';
-        if(req.status === 'DECLINED') color = '#c0392b';
-        
-        tr.innerHTML = `
-          <td><strong>${req.itemName}</strong></td>
-          <td>${req.requestorName}</td>
-          <td>${req.quantity} ${req.unit}</td>
-          <td>${req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleDateString() : ''}</td>
-          <td><span style="color:${color}; font-weight:bold;">${req.status}</span></td>
-          <td>-</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
 // Batch Processing
 window.processGroupAction = async (username, action) => {
     const pending = requests.filter(r => r.requestorUsername === username && r.status === 'PENDING');
@@ -555,6 +961,7 @@ window.processGroupAction = async (username, action) => {
     try {
         await batch.commit();
         if(action === 'APPROVE') await Promise.all(reportPromises);
+        logAudit("BATCH " + action, `Processed batch ${action} for ${username}`);
         alert(`Batch ${action} complete.`);
     } catch (e) {
         console.error("Batch Error", e);
@@ -569,6 +976,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
   try {
       if (action === 'DECLINE') {
         await updateDoc(doc(db, "requests", reqId), { status: "DECLINED" });
+        logAudit("DECLINE_REQ", `Declined request for ${req.itemName}`);
       } 
       else if (action === 'APPROVE') {
         const item = inventory.find(i => i.id === req.itemId);
@@ -591,6 +999,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
           unitPrice: item.prices?.[req.unit] || 0,
           timestamp: serverTimestamp()
         });
+        logAudit("APPROVE_REQ", `Approved request for ${req.itemName} by ${req.requestorName}`);
       }
   } catch (e) {
       console.error(e);
@@ -599,7 +1008,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
 };
 
 // =============================
-// PDF & INVENTORY (UNCHANGED)
+// PDF GENERATION (UNCHANGED)
 // =============================
 document.getElementById('btnReqPdf').onclick = () => {
     const dateInput = document.getElementById('reqReportDate').value;
@@ -648,328 +1057,9 @@ document.getElementById('btnReqPdf').onclick = () => {
         });
 
         doc.save(`Requests_${dateInput}.pdf`);
+        logAudit("EXPORT_PDF", `Exported requests report for ${dateInput}`);
     } catch (error) {
         console.error("PDF Error:", error);
         alert("An error occurred generating the PDF.");
     }
-};
-
-function openAddItem() {
-  currentEditId = null;
-  document.getElementById('modalTitle').textContent = 'Add Item';
-  const delBtn = document.getElementById('btnDeleteItem');
-  if(delBtn) delBtn.style.display = 'none';
-  
-  const fields = ['mName', 'mCategory', 'mQuantity', 'mDate', 'mPricePCS', 'mPriceBOX', 'mPriceTUB', 'mDescription'];
-  fields.forEach(id => {
-      const el = document.getElementById(id);
-      if(el) el.value = '';
-  });
-  
-  document.getElementById('mImageFile').value = '';
-  const preview = document.getElementById('mImagePreview');
-  preview.classList.remove('show');
-  preview.src = '';
-  
-  document.getElementById('mUnit').value = 'pcs'; 
-  document.getElementById('qrContainer').innerHTML = '';
-  document.getElementById('modal').style.display = 'flex';
-}
-
-function closeModal() { document.getElementById('modal').style.display = 'none'; }
-window.openAddItem = openAddItem;
-window.closeModal = closeModal;
-
-window.viewItem = (id) => {
-    const item = inventory.find(x => x.id === id);
-    if(!item) return;
-    document.getElementById('viewItemTitle').textContent = item.name;
-    document.getElementById('viewItemDesc').textContent = item.description || "No description provided.";
-    const img = document.getElementById('viewItemImage');
-    const noImg = document.getElementById('viewItemNoImage');
-    if (item.imageUrl) {
-        img.src = item.imageUrl; img.style.display = 'block'; noImg.style.display = 'none';
-    } else {
-        img.style.display = 'none'; noImg.style.display = 'block';
-    }
-    document.getElementById('viewItemModal').style.display = 'flex';
-};
-
-window.editItem = (id) => {
-  const item = inventory.find(x => x.id === id);
-  if(!item) return;
-  currentEditId = id;
-  document.getElementById('modalTitle').textContent = 'Edit Item';
-  const delBtn = document.getElementById('btnDeleteItem');
-  if(delBtn) delBtn.style.display = 'block';
-
-  document.getElementById('mName').value = item.name;
-  document.getElementById('mCategory').value = item.category || '';
-  document.getElementById('mQuantity').value = item.quantity;
-  document.getElementById('mDate').value = item.date;
-  document.getElementById('mDescription').value = item.description || '';
-  
-  const preview = document.getElementById('mImagePreview');
-  if(item.imageUrl) { preview.src = item.imageUrl; preview.classList.add('show'); } 
-  else { preview.classList.remove('show'); preview.src = ''; }
-  
-  document.getElementById('mUnit').value = item.unit; 
-  document.getElementById('mPricePCS').value = item.prices.pcs;
-  document.getElementById('mPriceBOX').value = item.prices.box;
-  document.getElementById('mPriceTUB').value = item.prices.tub;
-  
-  document.getElementById('modal').style.display = 'flex';
-};
-
-document.getElementById('btnSaveItem').onclick = async () => {
-  const name = document.getElementById('mName').value;
-  const category = document.getElementById('mCategory').value; 
-  const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
-  const date = document.getElementById('mDate').value;
-  const unit = document.getElementById('mUnit').value; 
-  const description = document.getElementById('mDescription').value;
-  const imageFile = document.getElementById('mImageFile').files[0];
-  const prices = {
-    pcs: parseFloat(document.getElementById('mPricePCS').value) || 0,
-    box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
-    tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
-  };
-
-  if (!name || !date) { alert('Please fill required fields.'); return; }
-
-  let imageUrl = null;
-  if (imageFile) { 
-      try { imageUrl = await toBase64(imageFile); } catch(e) { alert(e.message); return; } 
-  }
-
-  const itemData = { name, category, quantity, date, unit, prices, description };
-  
-  if (imageUrl) itemData.imageUrl = imageUrl;
-  else if (currentEditId) {
-      const existing = inventory.find(i => i.id === currentEditId);
-      if(existing && existing.imageUrl) itemData.imageUrl = existing.imageUrl;
-  }
-
-  try {
-    if (currentEditId) {
-        await updateDoc(doc(db, "inventory", currentEditId), itemData);
-    } else { 
-        await addDoc(collection(db, "inventory"), itemData); 
-        await addDoc(collection(db, "reports"), {
-            name: itemData.name, type: "NEW ITEM", quantity: itemData.quantity,
-            date: new Date().toISOString().split('T')[0], unitPrice: 0, prices: itemData.prices,
-            timestamp: serverTimestamp()
-        });
-    }
-    closeModal();
-  } catch (e) { 
-      console.error(e); alert("Error saving item."); 
-  }
-};
-
-document.getElementById('sortInventory').addEventListener('change', renderInventory);
-function renderInventory() {
-  const tbody = document.querySelector('#inventoryTable tbody');
-  tbody.innerHTML = '';
-  const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-  const sortMode = document.getElementById('sortInventory').value;
-  
-  let filtered = inventory.filter(item => item.name.toLowerCase().includes(searchTerm));
-  
-  filtered.sort((a, b) => {
-    if (sortMode === 'alpha') return a.name.localeCompare(b.name);
-    else if (sortMode === 'qtyLow') return a.quantity - b.quantity;
-    else if (sortMode === 'qtyHigh') return b.quantity - a.quantity;
-    else if (sortMode === 'dateNew') return new Date(b.date) - new Date(a.date);
-    return 0;
-  });
-
-  filtered.forEach((item) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${item.name}</td>
-      <td>${item.category || '-'}</td>
-      <td>${item.quantity}</td>
-      <td>${item.date}</td>
-      <td><small>PCS: ${formatCurrency(item.prices.pcs)}<br>BOX: ${formatCurrency(item.prices.box)}<br>TUB: ${formatCurrency(item.prices.tub)}</small></td>
-      <td><button class="btn" style="background:#34495e; color:white; padding: 5px 10px;" onclick="window.viewItem('${item.id}')">👁️ View</button></td>
-      <td>
-        <div style="display: flex; gap: 5px;">
-            <button class="btn" onclick="window.editItem('${item.id}')">Edit</button>
-            <button class="btn" style="background:#2ecc71; color:white;" onclick="window.openAdjust('${item.id}')">Adjust</button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-document.getElementById('inventorySearch').addEventListener('input', renderInventory);
-
-// Adjust Modal
-let adjustId = null; let adjustAmount = 1;
-window.openAdjust = (id) => {
-  const item = inventory.find(x => x.id === id); if(!item) return;
-  adjustId = id; adjustAmount = 1;
-  document.getElementById('adjustName').textContent = item.name;
-  document.getElementById('adjustCurrentStock').textContent = item.quantity;
-  document.getElementById('adjustInput').value = adjustAmount;
-  document.getElementById('adjustModal').style.display = 'flex';
-};
-document.getElementById('btnAdjPlus').onclick = () => { adjustAmount++; document.getElementById('adjustInput').value = adjustAmount; };
-document.getElementById('btnAdjMinus').onclick = () => { if (adjustAmount > 1) adjustAmount--; document.getElementById('adjustInput').value = adjustAmount; };
-
-document.getElementById('btnActionAdd').onclick = async () => {
-  if (!adjustId) return;
-  const item = inventory.find(x => x.id === adjustId);
-  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(adjustAmount) });
-  await addDoc(collection(db, "reports"), {
-    name: item.name, type: "RESTOCK", quantity: adjustAmount,
-    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-    timestamp: serverTimestamp()
-  });
-  document.getElementById('adjustModal').style.display = 'none';
-};
-document.getElementById('btnActionRemove').onclick = async () => {
-  if (!adjustId) return;
-  const item = inventory.find(x => x.id === adjustId);
-  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(-adjustAmount) });
-  await addDoc(collection(db, "reports"), {
-    name: item.name, type: "SOLD", quantity: adjustAmount,
-    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-    timestamp: serverTimestamp()
-  });
-  document.getElementById('adjustModal').style.display = 'none';
-};
-document.getElementById('btnAdjustCancel').onclick = () => { document.getElementById('adjustModal').style.display = 'none'; };
-
-// Bulk Action
-document.getElementById('btnOpenBulk').onclick = () => {
-  document.querySelector('#bulkTable tbody').innerHTML = ''; 
-  renderBulkTable(); document.getElementById('bulkModal').style.display = 'flex';
-};
-document.getElementById('btnBulkClose').onclick = () => { document.getElementById('bulkModal').style.display = 'none'; };
-
-function renderBulkTable() {
-  const tbody = document.querySelector('#bulkTable tbody');
-  const existingInputs = tbody.querySelectorAll('input[type="number"]');
-  const currentValues = {}; existingInputs.forEach(input => currentValues[input.id] = input.value);
-  
-  tbody.innerHTML = '';
-  inventory.forEach((item) => {
-    const tr = document.createElement('tr');
-    const inputId = `bulk-qty-${item.id}`;
-    const valToRender = currentValues[inputId] || 1;
-    tr.innerHTML = `
-      <td style="font-weight:bold;">${item.name} <span style="font-size:0.8em; color:#666;">(${item.unit})</span></td>
-      <td style="font-size:1.1em; text-align:center;">${item.quantity}</td>
-      <td>
-        <div style="display:flex; justify-content:center; gap:5px;">
-           <button class="btn" onclick="window.adjustBulkInput('${item.id}', -1)" style="padding:2px 8px;">-</button>
-           <input id="${inputId}" type="number" value="${valToRender}" min="1" style="width:50px; text-align:center;">
-           <button class="btn" onclick="window.adjustBulkInput('${item.id}', 1)" style="padding:2px 8px;">+</button>
-        </div>
-      </td>
-      <td>
-        <div style="display:flex; gap:5px; justify-content:center;">
-          <button class="btn" style="background:#2ecc71; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'add')">Add</button>
-          <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'remove')">Sold</button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-window.adjustBulkInput = (id, change) => {
-  const input = document.getElementById(`bulk-qty-${id}`);
-  let val = parseInt(input.value) || 0; val += change; if(val < 1) val = 1; input.value = val;
-};
-window.processBulkAction = async (id, action) => {
-  const item = inventory.find(x => x.id === id); const input = document.getElementById(`bulk-qty-${id}`);
-  const amount = parseInt(input.value) || 0; if (amount <= 0) return;
-  const ref = doc(db, "inventory", id);
-  
-  if (action === 'add') { 
-      await updateDoc(ref, { quantity: increment(amount) }); 
-      await addDoc(collection(db, "reports"), {
-        name: item.name, type: "RESTOCK", quantity: amount,
-        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-        timestamp: serverTimestamp()
-      });
-  } else { 
-      await updateDoc(ref, { quantity: increment(-amount) }); 
-      await addDoc(collection(db, "reports"), {
-        name: item.name, type: "SOLD", quantity: amount,
-        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-        timestamp: serverTimestamp()
-      });
-  }
-};
-
-document.getElementById('btnAddItem').onclick = openAddItem;
-document.getElementById('modalCancel').onclick = closeModal;
-
-if(document.getElementById('sortReports')) {
-    document.getElementById('sortReports').addEventListener('change', renderReports);
-}
-
-function renderReports() {
-  const tbody = document.querySelector('#reportsTable tbody');
-  if(!tbody) return;
-  tbody.innerHTML = '';
-  
-  let sortedReports = [...reports];
-  const sortMode = document.getElementById('sortReports') ? document.getElementById('sortReports').value : 'dateNew';
-
-  sortedReports.sort((a, b) => {
-    const timeA = getTimestampMs(a.timestamp || a.date);
-    const timeB = getTimestampMs(b.timestamp || b.date);
-    return sortMode === 'dateNew' ? timeB - timeA : timeA - timeB;
-  });
-  
-  sortedReports.forEach(log => {
-    const totalValue = (log.quantity || 0) * (log.unitPrice || 0);
-    let color = '#333';
-    if(log.type === 'RESTOCK') color = '#2ecc71';
-    if(log.type === 'SOLD') color = '#e74c3c';
-    if(log.type === 'NEW ITEM') color = '#3498db';
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${log.name}</td>
-      <td style="color:${color}; font-weight:bold;">${log.type}</td>
-      <td>${log.quantity}</td>
-      <td>${log.date}</td>
-      <td>${formatCurrency(totalValue)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-document.getElementById('btnPrint').onclick = () => { window.print(); };
-
-document.getElementById('btnExportCsv').onclick = () => {
-  let csv = 'Product Name,Action,Quantity,Date,Value\n';
-  reports.forEach(x => {
-    const val = (x.quantity || 0) * (x.unitPrice || 0);
-    const cleanName = `"${x.name.replace(/"/g, '""')}"`;
-    csv += `${cleanName},${x.type},${x.quantity},${x.date},${val.toFixed(2)}\n`;
-  });
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-};
-
-document.getElementById('btnDeleteItem').onclick = async () => {
-  if (!currentEditId) return;
-  if (confirm("Are you sure you want to permanently delete this item?")) {
-    try {
-      await deleteDoc(doc(db, "inventory", currentEditId));
-      closeModal();
-    } catch (e) {
-      console.error("Error deleting document: ", e);
-      alert("Error deleting item.");
-    }
-  }
 };
