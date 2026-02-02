@@ -696,7 +696,7 @@ function renderFlatRequestList(tbody, items) {
 }
 
 // =============================
-// DASHBOARD
+// DASHBOARD (UPDATED)
 // =============================
 function renderDashboard() {
   document.getElementById('totalItems').textContent = inventory.length;
@@ -708,11 +708,17 @@ function renderDashboard() {
   alertsList.innerHTML = '';
 
   const lowStockItems = inventory.filter(item => {
+      // --- NEW CHANGE: Ignore EQUIPMENT ---
+      if (item.type === 'EQUIPMENT') return false; 
+
+      // Existing Logic for Consumables
       const qty = item.quantity;
       const unit = item.unit ? item.unit.toLowerCase() : '';
+      
       if (unit === 'tub' && qty <= 10) return true;
       if (unit === 'pcs' && qty <= 10) return true;
       if (unit === 'box' && qty <= 5) return true;
+      
       return false; 
   });
 
