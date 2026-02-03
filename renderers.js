@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 
 // =============================
-// STATE
+// 1. STATE & GLOBALS
 // =============================
 let inventory = [];
 let reports = [];
@@ -30,7 +30,7 @@ let currentPage = 1;
 const itemsPerPage = 10;
 
 // =============================
-// HELPERS
+// 2. HELPERS
 // =============================
 const formatCurrency = (amount) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
 
@@ -63,7 +63,7 @@ const logAudit = async (action, details) => {
 };
 
 // =============================
-// FIRESTORE LISTENERS
+// 3. FIRESTORE LISTENERS
 // =============================
 function initListeners() {
   onSnapshot(query(collection(db, "inventory"), orderBy("name")), (snap) => {
@@ -98,7 +98,7 @@ function initListeners() {
 initListeners();
 
 // =============================
-// LOGIN & NAV
+// 4. LOGIN & NAVIGATION
 // =============================
 const adminAccounts = { admin: 'admin123', manager: 'manager123' };
 
@@ -121,19 +121,18 @@ window.handleLogin = () => {
 };
 document.getElementById('btnLogin').onclick = window.handleLogin;
 
-// --- NEW: PRESS ENTER TO LOGIN ---
+// Press Enter to Login
 ['loginUsername', 'loginPassword'].forEach(id => {
     const input = document.getElementById(id);
     if(input) {
         input.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
-                event.preventDefault(); // Stop default behavior
-                window.handleLogin();   // Trigger login function
+                event.preventDefault(); 
+                window.handleLogin();   
             }
         });
     }
 });
-// ---------------------------------
 
 document.querySelectorAll('.nav-item').forEach(item => {
   item.onclick = () => {
@@ -171,65 +170,7 @@ function switchView(view) {
 }
 
 // =============================
-// QR CODE GENERATION (POPUP)
-// =============================
-document.getElementById('btnGenerateQR').onclick = async () => {
-    const name = document.getElementById('mName').value;
-    if(!name) { alert("Please enter a product name first."); return; }
-
-    const qrModal = document.getElementById('qrModal');
-    const qrDisplay = document.getElementById('qrDisplayArea');
-    const qrNameLabel = document.getElementById('qrItemName');
-
-    qrDisplay.innerHTML = '';
-    qrNameLabel.textContent = name;
-
-    const canvas = document.createElement('canvas');
-    qrDisplay.appendChild(canvas);
-
-    try {
-        const qrData = JSON.stringify({ name: name });
-        
-        if (typeof QRCode !== 'undefined') {
-            await QRCode.toCanvas(canvas, qrData, { 
-                width: 200,
-                margin: 2,
-                color: { dark: '#000000', light: '#ffffff' }
-            });
-            qrModal.style.display = 'flex'; // Show Modal
-        } else {
-            alert("QR Library not loaded.");
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Error generating QR code.");
-    }
-};
-
-// Download QR
-document.getElementById('btnDownloadQR').onclick = () => {
-    const qrDisplay = document.getElementById('qrDisplayArea');
-    const canvas = qrDisplay.querySelector('canvas');
-    const itemName = document.getElementById('qrItemName').textContent;
-
-    if (canvas) {
-        const imageURI = canvas.toDataURL("image/png");
-        const link = document.createElement('a');
-        link.href = imageURI;
-        link.download = `QR_${itemName.replace(/\s+/g, '_')}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-};
-
-// Close QR Modal
-document.getElementById('btnCloseQR').onclick = () => {
-    document.getElementById('qrModal').style.display = 'none';
-};
-
-// =============================
-// REQUESTS LOGIC
+// 5. REQUESTS LOGIC (WITH BULK ACCEPT)
 // =============================
 
 window.processRequest = async (reqId, action, showAlert = true) => {
@@ -243,7 +184,6 @@ window.processRequest = async (reqId, action, showAlert = true) => {
         if(showAlert) alert("Request Declined.");
       } 
       else if (action === 'APPROVE') {
-        // Check stock
         const itemRef = doc(db, "inventory", req.itemId);
         const itemSnap = await getDoc(itemRef);
         
@@ -254,7 +194,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
 
         const itemData = itemSnap.data();
         if (itemData.quantity < req.quantity) {
-            if(showAlert) alert(`Not enough stock (Only ${itemData.quantity} left).`);
+            if(showAlert) alert(`Not enough stock. Available: ${itemData.quantity}`);
             return;
         }
         
@@ -263,7 +203,6 @@ window.processRequest = async (reqId, action, showAlert = true) => {
 
         batch.update(itemRef, { quantity: increment(-req.quantity) });
         batch.update(reqRef, { status: "APPROVED" });
-        
         await batch.commit();
 
         await addDoc(collection(db, "reports"), {
@@ -272,7 +211,6 @@ window.processRequest = async (reqId, action, showAlert = true) => {
           unitPrice: itemData.prices?.[req.unit] || 0,
           timestamp: serverTimestamp()
         });
-        
         logAudit("APPROVE_REQ", `Approved request for ${req.itemName}`);
         if(showAlert) alert("Approved Successfully!");
       }
@@ -301,6 +239,7 @@ window.processGroupAction = async (username, action) => {
         else if (action === 'APPROVE') {
             const item = inventory.find(i => i.id === req.itemId);
             
+            // Check stock before adding to batch
             if (item && item.quantity >= req.quantity) {
                 const itemRef = doc(db, "inventory", req.itemId);
                 batch.update(itemRef, { quantity: increment(-req.quantity) });
@@ -314,12 +253,14 @@ window.processGroupAction = async (username, action) => {
                 };
                 reportPromises.push(addDoc(collection(db, "reports"), reportData));
                 hasOps = true;
+            } else {
+                console.warn(`Skipping ${req.itemName}: Not enough stock.`);
             }
         }
     }
 
     if (!hasOps) {
-        alert("No valid operations. Check stock levels.");
+        alert("No items could be processed (check stock levels).");
         return;
     }
 
@@ -362,29 +303,27 @@ function renderRequests() {
   tbody.innerHTML = '';
   if(paginationContainer) paginationContainer.innerHTML = ''; 
   
+  // 1. NON-PENDING: Show flat list
   if (currentRequestFilter !== 'PENDING') {
     const filtered = requests.filter(req => {
         if (currentRequestFilter === 'ALL') return true;
         return req.status === currentRequestFilter;
     });
-
     if(filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No records found.</td></tr>';
         return;
     }
-
     const start = (currentPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const paginatedItems = filtered.slice(start, end);
     const totalPages = Math.ceil(filtered.length / itemsPerPage);
-
     renderFlatRequestList(tbody, paginatedItems);
     if(paginationContainer) renderPagination(totalPages);
     return;
   }
 
+  // 2. PENDING: Group by User
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
-  
   if(pendingRequests.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No pending requests.</td></tr>';
     return;
@@ -403,30 +342,67 @@ function renderRequests() {
     grouped[user].items.push(req);
   });
 
-  const allGroups = Object.values(grouped);
-  const start = (currentPage - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
-  const paginatedGroups = allGroups.slice(start, end);
-  const totalPages = Math.ceil(allGroups.length / itemsPerPage);
-
-  renderGroupedRequests(tbody, paginatedGroups);
-  if(paginationContainer) renderPagination(totalPages);
+  renderGroupedRequests(tbody, Object.values(grouped));
 }
 
-function renderPagination(totalPages) {
-    const container = document.getElementById('pagination');
-    if(!container || totalPages <= 1) return;
+function renderGroupedRequests(tbody, groups) {
+    groups.forEach(group => {
+        const headerRow = document.createElement('tr');
+        headerRow.style.background = '#f0f9ff';
+        headerRow.style.borderTop = '2px solid #cbd5e1';
+        
+        headerRow.innerHTML = `
+            <td colspan="4" style="padding: 15px;">
+                <div style="font-size:1.1em;">
+                    <strong>👤 ${group.name}</strong> <span style="color:#64748b; font-size:0.9em;">(@${group.username})</span>
+                    <span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-size:0.8em; margin-left:10px;">
+                        ${group.items.length} Items
+                    </span>
+                </div>
+            </td>
+            <td colspan="2" style="text-align:right; padding: 15px;">
+                <button class="btn" style="background:#27ae60; color:white; font-weight:bold; margin-right:5px; font-size:0.85em;" 
+                    onclick="window.processGroupAction('${group.username}', 'APPROVE')">
+                    ✔ Approve All
+                </button>
+                <button class="btn" style="background:#c0392b; color:white; font-weight:bold; font-size:0.85em;" 
+                    onclick="window.processGroupAction('${group.username}', 'DECLINE')">
+                    ✖ Decline All
+                </button>
+            </td>
+        `;
+        tbody.appendChild(headerRow);
 
-    if(currentPage > 1) {
-        container.innerHTML += `<button class="page-btn" onclick="window.changePage(${currentPage - 1})">«</button>`;
-    }
-    for(let i = 1; i <= totalPages; i++) {
-        const activeClass = i === currentPage ? 'active' : '';
-        container.innerHTML += `<button class="page-btn ${activeClass}" onclick="window.changePage(${i})">${i}</button>`;
-    }
-    if(currentPage < totalPages) {
-        container.innerHTML += `<button class="page-btn" onclick="window.changePage(${currentPage + 1})">»</button>`;
-    }
+        group.items.forEach(req => {
+            const tr = document.createElement('tr');
+            const dateStr = req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleString() : 'Just now';
+            
+            const stockItem = inventory.find(i => i.id === req.itemId);
+            let stockWarning = '';
+            if(stockItem && stockItem.quantity < req.quantity) {
+                stockWarning = `<span style="color:red; font-weight:bold; font-size:0.8em;">⚠️ Low Stock (Only ${stockItem.quantity})</span>`;
+            } else if (!stockItem) {
+                stockWarning = `<span style="color:red; font-weight:bold; font-size:0.8em;">⚠️ Item Deleted</span>`;
+            }
+
+            tr.innerHTML = `
+                <td style="padding-left: 40px; border-left: 4px solid #cbd5e1;">${req.itemName} <br>${stockWarning}</td>
+                <td>—</td>
+                <td style="font-weight:bold;">${req.quantity} ${req.unit}</td>
+                <td><small>${dateStr}</small></td>
+                <td><span style="color:#f39c12; font-weight:bold;">PENDING</span></td>
+                <td>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn" style="font-size:0.8em; padding:2px 6px; background:#27ae60; color:white;" 
+                           onclick="window.processRequest('${req.id}', 'APPROVE')">✔</button>
+                        <button class="btn" style="font-size:0.8em; padding:2px 6px; background:#c0392b; color:white;" 
+                           onclick="window.processRequest('${req.id}', 'DECLINE')">✖</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    });
 }
 
 function renderFlatRequestList(tbody, items) {
@@ -453,141 +429,19 @@ function renderFlatRequestList(tbody, items) {
     });
 }
 
-function renderGroupedRequests(tbody, groups) {
-  groups.forEach(group => {
-    const headerRow = document.createElement('tr');
-    headerRow.style.background = '#f0f9ff';
-    headerRow.style.borderTop = '2px solid #cbd5e1';
-    
-    headerRow.innerHTML = `
-        <td colspan="4" style="padding: 15px;">
-            <div style="font-size:1.1em;">
-                <strong>👤 ${group.name}</strong> <span style="color:#64748b; font-size:0.9em;">(@${group.username})</span>
-                <span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-size:0.8em; margin-left:10px;">
-                    ${group.items.length} Items Requested
-                </span>
-            </div>
-        </td>
-        <td colspan="2" style="text-align:right; padding: 15px;">
-            <button class="btn" style="background:#27ae60; color:white; font-weight:bold; margin-right:10px;" 
-                onclick="window.processGroupAction('${group.username}', 'APPROVE')">
-                ✔ Approve All
-            </button>
-            <button class="btn" style="background:#c0392b; color:white; font-weight:bold;" 
-                onclick="window.processGroupAction('${group.username}', 'DECLINE')">
-                ✖ Decline All
-            </button>
-        </td>
-    `;
-    tbody.appendChild(headerRow);
-
-    group.items.forEach(req => {
-        const tr = document.createElement('tr');
-        const dateStr = req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleString() : 'Just now';
-        
-        const stockItem = inventory.find(i => i.id === req.itemId);
-        let stockWarning = '';
-        if(stockItem && stockItem.quantity < req.quantity) {
-            stockWarning = `<span style="color:red; font-weight:bold; font-size:0.8em;">⚠️ Low Stock (Only ${stockItem.quantity})</span>`;
-        } else if (!stockItem) {
-            stockWarning = `<span style="color:red; font-weight:bold; font-size:0.8em;">⚠️ Item Deleted</span>`;
-        }
-
-        tr.innerHTML = `
-            <td style="padding-left: 40px; border-left: 4px solid #cbd5e1;">${req.itemName} <br>${stockWarning}</td>
-            <td>—</td>
-            <td style="font-weight:bold;">${req.quantity} ${req.unit}</td>
-            <td><small>${dateStr}</small></td>
-            <td><span style="color:#f39c12; font-weight:bold;">PENDING</span></td>
-            <td>
-                <div style="display:flex; gap:5px;">
-                    <button class="btn" style="font-size:0.8em; padding:5px 8px; background:#27ae60; color:white;" 
-                       onclick="window.processRequest('${req.id}', 'APPROVE')">✔</button>
-                    <button class="btn" style="font-size:0.8em; padding:5px 8px; background:#c0392b; color:white;" 
-                       onclick="window.processRequest('${req.id}', 'DECLINE')">✖</button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-  });
+function renderPagination(totalPages) {
+    const container = document.getElementById('pagination');
+    if(!container || totalPages <= 1) return;
+    if(currentPage > 1) container.innerHTML += `<button class="page-btn" onclick="window.changePage(${currentPage - 1})">«</button>`;
+    for(let i = 1; i <= totalPages; i++) {
+        const activeClass = i === currentPage ? 'active' : '';
+        container.innerHTML += `<button class="page-btn ${activeClass}" onclick="window.changePage(${i})">${i}</button>`;
+    }
+    if(currentPage < totalPages) container.innerHTML += `<button class="page-btn" onclick="window.changePage(${currentPage + 1})">»</button>`;
 }
 
 // =============================
-// PDF & CSV EXPORTS
-// =============================
-document.getElementById('btnReqPdf').onclick = () => {
-    const dateInput = document.getElementById('reqReportDate').value;
-    if (!dateInput) { alert("Please select a date first."); return; }
-    if (!window.jspdf) { alert("Error: jsPDF library not found."); return; }
-
-    const filtered = requests.filter(r => {
-        if (!r.timestamp) return false;
-        const dateObj = new Date(r.timestamp.seconds * 1000);
-        return dateObj.toLocaleDateString('en-CA') === dateInput;
-    });
-
-    if (filtered.length === 0) { alert(`No requests found for ${dateInput}.`); return; }
-
-    try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.text(`Borrow Requests Report`, 14, 22);
-        doc.setFontSize(11);
-        doc.text(`Date: ${dateInput}`, 14, 30);
-        doc.text(`Total Items: ${filtered.length}`, 14, 36);
-
-        const tableColumn = ["Item Name", "Qty", "Unit", "Requested By", "Time", "Status"];
-        const tableRows = [];
-
-        filtered.forEach(req => {
-            const timeStr = new Date(req.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            tableRows.push([
-                req.itemName,
-                req.quantity,
-                req.unit,
-                req.requestorName,
-                timeStr,
-                req.status
-            ]);
-        });
-
-        doc.autoTable({
-            head: [tableColumn],
-            body: tableRows,
-            startY: 40,
-            theme: 'grid',
-            styles: { fontSize: 10 },
-            headStyles: { fillColor: [15, 23, 42] } 
-        });
-
-        doc.save(`Requests_${dateInput}.pdf`);
-        logAudit("EXPORT_PDF", `Exported requests report for ${dateInput}`);
-    } catch (error) {
-        console.error("PDF Error:", error);
-        alert("An error occurred generating the PDF.");
-    }
-};
-
-document.getElementById('btnPrint').onclick = () => { window.print(); };
-
-document.getElementById('btnExportCsv').onclick = () => {
-  let csv = 'Product Name,Action,Quantity,Date,Value\n';
-  reports.forEach(x => {
-    const val = (x.quantity || 0) * (x.unitPrice || 0);
-    const cleanName = `"${x.name.replace(/"/g, '""')}"`;
-    csv += `${cleanName},${x.type},${x.quantity},${x.date},${val.toFixed(2)}\n`;
-  });
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-};
-
-// =============================
-// INVENTORY RENDERING (UNIFIED)
+// 6. INVENTORY LOGIC
 // =============================
 document.getElementById('sortInventory').addEventListener('change', renderInventory);
 document.getElementById('inventorySearch').addEventListener('input', renderInventory);
@@ -611,10 +465,9 @@ function renderInventory() {
 
   filtered.forEach((item) => {
     const tr = document.createElement('tr');
-    
-    let typeBadge = `<span style="background:#95a5a6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">?</span>`;
-    if (item.type === 'EQUIPMENT') typeBadge = `<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">🔧 EQUIP</span>`;
-    if (item.type === 'CONSUMABLE') typeBadge = `<span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">🔩 CONSUM</span>`;
+    let typeBadge = `<span style="background:#95a5a6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">?</span>`;
+    if (item.type === 'EQUIPMENT') typeBadge = `<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">🔧 EQUIP</span>`;
+    if (item.type === 'CONSUMABLE') typeBadge = `<span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">🔩 CONSUM</span>`;
 
     const unitKey = (item.unit || 'pcs').toLowerCase(); 
     const unitPrice = item.prices ? (item.prices[unitKey] || 0) : 0;
@@ -624,7 +477,7 @@ function renderInventory() {
       <td style="font-weight:bold; color:#2c3e50;">${item.name}</td>
       <td>${item.category || '-'}</td>
       <td style="font-size:1.1em;">${item.quantity} <small style="color:#7f8c8d;">${item.unit}</small></td>
-      <td><small style="font-weight:bold; color:#27ae60;">${item.unit.toUpperCase()}: ${formatCurrency(unitPrice)}</small></td>
+      <td><small style="font-weight:bold; color:#27ae60;">${formatCurrency(unitPrice)}</small></td>
       <td>
         <div style="display: flex; gap: 5px;">
             <button class="btn" style="background:#34495e; color:white; padding: 5px 10px;" onclick="window.viewItem('${item.id}')">👁️</button>
@@ -638,12 +491,145 @@ function renderInventory() {
 }
 
 // =============================
-// REPORTS RENDERING
+// 7. ACCOUNTS RENDERING & LOGIC
 // =============================
+function renderAccounts() {
+    const tbody = document.querySelector('#accountsTable tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+
+    accountsData.forEach(acc => {
+        const tr = document.createElement('tr');
+        let avatarHtml = `<div style="width:40px; height:40px; border-radius:50%; background:#bdc3c7; display:flex; align-items:center; justify-content:center; color:white;">${acc.name.charAt(0).toUpperCase()}</div>`;
+        if(acc.imageUri) avatarHtml = `<img src="${acc.imageUri}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">`;
+
+        const roleColor = acc.role === 'owner' ? '#8e44ad' : (acc.role === 'manager' ? '#2980b9' : '#27ae60');
+
+        tr.innerHTML = `
+            <td>${avatarHtml}</td>
+            <td style="font-weight:bold;">${acc.name}</td>
+            <td>@${acc.username}</td>
+            <td>${acc.position || '-'}</td>
+            <td><span style="padding:4px 8px; border-radius:4px; color:white; font-size:0.8em; background:${roleColor}">${acc.role.toUpperCase()}</span></td>
+            <td>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn" style="background:#f39c12; color:white; padding:5px 10px; font-size:0.8em;" 
+                        onclick="window.openChangePassword('${acc.id}', '${acc.name}')">🔑 Pass</button>
+                    <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px; font-size:0.8em;" 
+                        onclick="window.deleteAccount('${acc.id}', '${acc.name}')">Delete</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// 1. OPEN CHANGE PASSWORD MODAL
+window.openChangePassword = (id, name) => {
+    currentPassId = id;
+    document.getElementById('passAccountName').textContent = name;
+    document.getElementById('newPasswordInput').value = '';
+    document.getElementById('changePassModal').style.display = 'flex';
+};
+
+// 2. CONFIRM CHANGE PASSWORD
+const btnConfirmPass = document.getElementById('btnConfirmChangePass');
+if(btnConfirmPass) {
+    btnConfirmPass.onclick = async () => {
+        const newPass = document.getElementById('newPasswordInput').value;
+        if(!newPass || newPass.length < 4) { alert("Password too short."); return; }
+        try {
+            await updateDoc(doc(db, "accounts", currentPassId), { password: newPass });
+            logAudit("CHANGE_PASS", `Updated password for: ${currentPassId}`);
+            alert("Password updated!");
+            document.getElementById('changePassModal').style.display = 'none';
+        } catch(e) { console.error(e); alert("Error updating password."); }
+    };
+}
+
+// 3. DELETE ACCOUNT
+window.deleteAccount = async (id, name) => {
+    if(confirm(`Delete account for ${name}?`)) {
+        try { 
+            await deleteDoc(doc(db, "accounts", id)); 
+            logAudit("DELETE_ACCOUNT", `Deleted user: ${name}`);
+        } catch(e) { alert("Error deleting."); }
+    }
+};
+
+// 4. ADD ACCOUNT
+const btnOpenAddAccount = document.getElementById('btnOpenAddAccount');
+if(btnOpenAddAccount) {
+    btnOpenAddAccount.onclick = () => {
+        document.getElementById('accName').value = '';
+        document.getElementById('accUsername').value = '';
+        document.getElementById('accPosition').value = '';
+        document.getElementById('accPassword').value = '';
+        document.getElementById('accRole').value = 'employee';
+        document.getElementById('accImageInput').value = '';
+        document.getElementById('accImagePreview').style.display = 'none';
+        document.getElementById('accNoImage').style.display = 'block';
+        document.getElementById('accountModal').style.display = 'flex';
+    };
+}
+
+const btnCancelAccount = document.getElementById('btnCancelAccount');
+if(btnCancelAccount) {
+    btnCancelAccount.onclick = () => { document.getElementById('accountModal').style.display = 'none'; };
+}
+
+const accImageInput = document.getElementById('accImageInput');
+if(accImageInput) {
+    accImageInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if(file) {
+            try {
+                const base64 = await toBase64(file);
+                const img = document.getElementById('accImagePreview');
+                img.src = base64; img.style.display = 'block';
+                document.getElementById('accNoImage').style.display = 'none';
+            } catch(err) { alert(err.message); e.target.value = ''; }
+        }
+    };
+}
+
+const btnSaveAccount = document.getElementById('btnSaveAccount');
+if(btnSaveAccount) {
+    btnSaveAccount.onclick = async () => {
+        const name = document.getElementById('accName').value.trim();
+        const username = document.getElementById('accUsername').value.trim();
+        const position = document.getElementById('accPosition').value.trim();
+        const password = document.getElementById('accPassword').value.trim();
+        const role = document.getElementById('accRole').value;
+        const fileInput = document.getElementById('accImageInput');
+
+        if(!name || !username || !password) { alert("Fields required."); return; }
+        if(accountsData.some(a => a.username === username)) { alert("Username taken."); return; }
+
+        let imageUri = "";
+        if(fileInput.files[0]) {
+            try { imageUri = await toBase64(fileInput.files[0]); } catch(e) { alert("Image error."); return; }
+        }
+
+        try {
+            await addDoc(collection(db, "accounts"), {
+                name, username, position, password, role, imageUri, createdAt: serverTimestamp()
+            });
+            logAudit("CREATE_ACCOUNT", `Created ${role}: ${username}`);
+            alert("Account Created!");
+            document.getElementById('accountModal').style.display = 'none';
+        } catch(e) { console.error(e); alert("Error creating account."); }
+    };
+}
+
+// =============================
+// 8. OTHER FUNCTIONALITY (Reports, Audit, Modals, Bulk, QR)
+// =============================
+
+// Reports Rendering
 if(document.getElementById('sortReports')) {
     document.getElementById('sortReports').addEventListener('change', renderReports);
 }
-
 function renderReports() {
   const tbody = document.querySelector('#reportsTable tbody');
   if(!tbody) return;
@@ -683,50 +669,7 @@ function renderReports() {
   });
 }
 
-// =============================
-// ACCOUNTS RENDERING
-// =============================
-function renderAccounts() {
-    const tbody = document.querySelector('#accountsTable tbody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-
-    accountsData.forEach(acc => {
-        const tr = document.createElement('tr');
-        
-        let avatarHtml = `<div style="width:40px; height:40px; border-radius:50%; background:#bdc3c7; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold;">${acc.name.charAt(0).toUpperCase()}</div>`;
-        if(acc.imageUri) {
-            avatarHtml = `<img src="${acc.imageUri}" class="avatar-circle" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">`;
-        }
-
-        const roleColor = acc.role === 'owner' ? 'role-owner' : (acc.role === 'manager' ? 'role-manager' : 'role-employee');
-
-        tr.innerHTML = `
-            <td>${avatarHtml}</td>
-            <td style="font-weight:bold;">${acc.name}</td>
-            <td>@${acc.username}</td>
-            <td>${acc.position || '-'}</td>
-            <td><span class="role-badge ${roleColor}" style="padding:4px 8px; border-radius:4px; color:white; font-size:0.8em; background:${acc.role==='owner'?'#8e44ad':acc.role==='manager'?'#2980b9':'#27ae60'}">${acc.role.toUpperCase()}</span></td>
-            <td>
-                <div style="display:flex; gap:5px;">
-                    <button class="btn" style="background:#f39c12; color:white; padding:5px 10px; font-size:0.8em;" 
-                        onclick="window.openChangePassword('${acc.id}', '${acc.name}')">
-                        🔑 Pass
-                    </button>
-                    <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px; font-size:0.8em;" 
-                        onclick="window.deleteAccount('${acc.id}', '${acc.name}')">
-                        Delete
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// =============================
-// AUDIT LOG RENDERING
-// =============================
+// Audit Logs
 function renderAuditLogs() {
     const tbody = document.querySelector('#auditTable tbody');
     if(!tbody) return;
@@ -756,9 +699,30 @@ function renderAuditLogs() {
     });
 }
 
-// =============================
-// DASHBOARD LOGIC
-// =============================
+// Export Audit Logic
+const btnExportAudit = document.getElementById('btnExportAudit');
+if(btnExportAudit) {
+    btnExportAudit.onclick = () => {
+        if(auditLogs.length === 0) { alert("No logs to export."); return; }
+        let csv = 'Time,Actor,Action,Details\n';
+        auditLogs.forEach(log => {
+            const time = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '';
+            const details = log.details ? `"${log.details.replace(/"/g, '""')}"` : '';
+            csv += `${time},${log.actor},${log.action},${details}\n`;
+        });
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `AuditLogs_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+    };
+}
+const auditSearchInput = document.getElementById('auditSearch');
+if(auditSearchInput) {
+    auditSearchInput.addEventListener('input', renderAuditLogs);
+}
+
+// Dashboard Logic
 function renderDashboard() {
   document.getElementById('totalItems').textContent = inventory.length;
   const pendingCount = requests.filter(r => r.status === 'PENDING').length;
@@ -769,12 +733,9 @@ function renderDashboard() {
   alertsList.innerHTML = '';
 
   const lowStockItems = inventory.filter(item => {
-      // Ignore Equipment in alerts
       if (item.type === 'EQUIPMENT') return false; 
-
       const qty = item.quantity;
       const unit = item.unit ? item.unit.toLowerCase() : '';
-      
       if (unit === 'tub' && qty <= 10) return true;
       if (unit === 'pcs' && qty <= 10) return true;
       if (unit === 'box' && qty <= 5) return true;
@@ -810,14 +771,12 @@ function renderScrollableChart() {
     const widthPercent = (item.quantity / maxQty) * 100;
     const u = item.unit ? item.unit.toLowerCase() : '';
     let isLow = false;
-    
     if (item.type !== 'EQUIPMENT') {
         if (u === 'tub' && item.quantity <= 10) isLow = true;
         else if (u === 'pcs' && item.quantity <= 10) isLow = true;
         else if (u === 'box' && item.quantity <= 5) isLow = true;
     }
     const barColor = isLow ? '#e74c3c' : '#7cb5ec';
-
     html += `
       <div class="chart-row">
         <div class="row-label" title="${item.name}">${item.name}</div>
@@ -831,32 +790,71 @@ function renderScrollableChart() {
   container.innerHTML = html;
 }
 
-// =============================
-// MODAL & ITEM LOGIC
-// =============================
-function openAddItem() {
+// PDF & CSV Exports
+document.getElementById('btnReqPdf').onclick = () => {
+    const dateInput = document.getElementById('reqReportDate').value;
+    if (!dateInput) { alert("Please select a date first."); return; }
+    if (!window.jspdf) { alert("Error: jsPDF library not found."); return; }
+    const filtered = requests.filter(r => {
+        if (!r.timestamp) return false;
+        const dateObj = new Date(r.timestamp.seconds * 1000);
+        return dateObj.toLocaleDateString('en-CA') === dateInput;
+    });
+    if (filtered.length === 0) { alert(`No requests found for ${dateInput}.`); return; }
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.setFontSize(18);
+        doc.text(`Borrow Requests Report`, 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Date: ${dateInput}`, 14, 30);
+        doc.text(`Total Items: ${filtered.length}`, 14, 36);
+        const tableColumn = ["Item Name", "Qty", "Unit", "Requested By", "Time", "Status"];
+        const tableRows = [];
+        filtered.forEach(req => {
+            const timeStr = new Date(req.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            tableRows.push([req.itemName, req.quantity, req.unit, req.requestorName, timeStr, req.status]);
+        });
+        doc.autoTable({
+            head: [tableColumn], body: tableRows, startY: 40, theme: 'grid',
+            styles: { fontSize: 10 }, headStyles: { fillColor: [15, 23, 42] } 
+        });
+        doc.save(`Requests_${dateInput}.pdf`);
+        logAudit("EXPORT_PDF", `Exported requests report for ${dateInput}`);
+    } catch (error) { console.error("PDF Error:", error); alert("An error occurred generating the PDF."); }
+};
+
+document.getElementById('btnPrint').onclick = () => { window.print(); };
+document.getElementById('btnExportCsv').onclick = () => {
+  let csv = 'Product Name,Action,Quantity,Date,Value\n';
+  reports.forEach(x => {
+    const val = (x.quantity || 0) * (x.unitPrice || 0);
+    const cleanName = `"${x.name.replace(/"/g, '""')}"`;
+    csv += `${cleanName},${x.type},${x.quantity},${x.date},${val.toFixed(2)}\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reports_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+};
+
+// Item Modals & Logic
+window.openAddItem = () => {
   currentEditId = null;
   document.getElementById('modalTitle').textContent = 'Add Item';
   if(document.getElementById('btnDeleteItem')) document.getElementById('btnDeleteItem').style.display = 'none';
-  
   ['mName', 'mCategory', 'mQuantity', 'mPricePCS', 'mPriceBOX', 'mPriceTUB', 'mDescription'].forEach(id => {
       const el = document.getElementById(id);
       if(el) el.value = '';
   });
-  
-  if(document.getElementById('mType')) document.getElementById('mType').value = 'CONSUMABLE';
-
   document.getElementById('mImageFile').value = '';
-  const preview = document.getElementById('mImagePreview');
-  preview.classList.remove('show');
-  preview.src = '';
-  document.getElementById('mUnit').value = 'pcs'; 
+  document.getElementById('mImagePreview').classList.remove('show');
   document.getElementById('modal').style.display = 'flex';
-}
-
-function closeModal() { document.getElementById('modal').style.display = 'none'; }
-window.openAddItem = openAddItem;
-window.closeModal = closeModal;
+};
+document.getElementById('btnAddItem').onclick = window.openAddItem;
+window.closeModal = () => { document.getElementById('modal').style.display = 'none'; };
+document.getElementById('modalCancel').onclick = window.closeModal;
 
 window.viewItem = (id) => {
     const item = inventory.find(x => x.id === id);
@@ -879,32 +877,26 @@ window.editItem = (id) => {
   currentEditId = id;
   document.getElementById('modalTitle').textContent = 'Edit Item';
   document.getElementById('btnDeleteItem').style.display = 'block';
-
   document.getElementById('mName').value = item.name;
   document.getElementById('mCategory').value = item.category || '';
-  if(document.getElementById('mType')) document.getElementById('mType').value = item.type || 'CONSUMABLE';
-  
+  document.getElementById('mType').value = item.type || 'CONSUMABLE';
   document.getElementById('mQuantity').value = item.quantity;
   document.getElementById('mDescription').value = item.description || '';
-  
   const preview = document.getElementById('mImagePreview');
   if(item.imageUrl) { preview.src = item.imageUrl; preview.classList.add('show'); } 
   else { preview.classList.remove('show'); preview.src = ''; }
-  
   document.getElementById('mUnit').value = item.unit; 
   document.getElementById('mPricePCS').value = item.prices.pcs;
   document.getElementById('mPriceBOX').value = item.prices.box;
   document.getElementById('mPriceTUB').value = item.prices.tub;
-  
   document.getElementById('modal').style.display = 'flex';
 };
 
 document.getElementById('btnSaveItem').onclick = async () => {
   const name = document.getElementById('mName').value;
-  const type = document.getElementById('mType') ? document.getElementById('mType').value : 'CONSUMABLE';
+  const type = document.getElementById('mType').value;
   const category = document.getElementById('mCategory').value; 
   const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
-  
   const unit = document.getElementById('mUnit').value; 
   const description = document.getElementById('mDescription').value;
   const imageFile = document.getElementById('mImageFile').files[0];
@@ -913,29 +905,19 @@ document.getElementById('btnSaveItem').onclick = async () => {
     box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
     tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
   };
-
   if (!name) { alert('Name is required.'); return; }
-
   let imageUrl = null;
   if (imageFile) { try { imageUrl = await toBase64(imageFile); } catch(e) { alert(e.message); return; } }
-
-  const itemData = { 
-      name, 
-      type: type, 
-      category, quantity, unit, prices, description, 
-      date: new Date().toISOString().split('T')[0] 
-  };
-  
+  const itemData = { name, type, category, quantity, unit, prices, description, date: new Date().toISOString().split('T')[0] };
   if (imageUrl) itemData.imageUrl = imageUrl;
   else if (currentEditId) {
       const existing = inventory.find(i => i.id === currentEditId);
       if(existing && existing.imageUrl) itemData.imageUrl = existing.imageUrl;
   }
-
   try {
     if (currentEditId) {
         await updateDoc(doc(db, "inventory", currentEditId), itemData);
-        logAudit("UPDATE ITEM", `Updated item: ${name} (${type})`);
+        logAudit("UPDATE ITEM", `Updated: ${name}`);
     } else { 
         await addDoc(collection(db, "inventory"), itemData); 
         await addDoc(collection(db, "reports"), {
@@ -943,31 +925,57 @@ document.getElementById('btnSaveItem').onclick = async () => {
             date: new Date().toISOString().split('T')[0], unitPrice: 0, prices: itemData.prices,
             timestamp: serverTimestamp()
         });
-        logAudit("CREATE ITEM", `Created item: ${name} (${type})`);
+        logAudit("CREATE ITEM", `Created: ${name}`);
     }
-    closeModal();
-  } catch (e) { console.error(e); alert("Error saving item: " + e.message); }
+    window.closeModal();
+  } catch (e) { console.error(e); alert("Error saving: " + e.message); }
 };
 
 document.getElementById('btnDeleteItem').onclick = async () => {
   if (!currentEditId) return;
-  if (confirm("Are you sure you want to permanently delete this item?")) {
+  if (confirm("Permanently delete this item?")) {
     try {
       const item = inventory.find(i => i.id === currentEditId);
       await deleteDoc(doc(db, "inventory", currentEditId));
-      logAudit("DELETE_ITEM", `Deleted item: ${item ? item.name : currentEditId}`);
-      closeModal();
-    } catch (e) {
-      console.error("Error deleting document: ", e);
-      alert("Error deleting item.");
-    }
+      logAudit("DELETE_ITEM", `Deleted: ${item ? item.name : currentEditId}`);
+      window.closeModal();
+    } catch (e) { alert("Error deleting."); }
   }
 };
 
-document.getElementById('modalCancel').onclick = closeModal;
-document.getElementById('btnAddItem').onclick = openAddItem;
+// QR
+document.getElementById('btnGenerateQR').onclick = async () => {
+    const name = document.getElementById('mName').value;
+    if(!name) { alert("Enter product name."); return; }
+    const qrModal = document.getElementById('qrModal');
+    const qrDisplay = document.getElementById('qrDisplayArea');
+    document.getElementById('qrItemName').textContent = name;
+    qrDisplay.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    qrDisplay.appendChild(canvas);
+    try {
+        const qrData = JSON.stringify({ name: name });
+        if (typeof QRCode !== 'undefined') {
+            await QRCode.toCanvas(canvas, qrData, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+            qrModal.style.display = 'flex';
+        } else { alert("QR Library missing."); }
+    } catch (e) { alert("Error generating QR."); }
+};
+document.getElementById('btnDownloadQR').onclick = () => {
+    const canvas = document.getElementById('qrDisplayArea').querySelector('canvas');
+    const itemName = document.getElementById('qrItemName').textContent;
+    if (canvas) {
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL("image/png");
+        link.download = `QR_${itemName.replace(/\s+/g, '_')}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
+document.getElementById('btnCloseQR').onclick = () => { document.getElementById('qrModal').style.display = 'none'; };
 
-// Adjust Modal
+// Adjust Stock Modal
 let adjustId = null; let adjustAmount = 1;
 window.openAdjust = (id) => {
   const item = inventory.find(x => x.id === id); if(!item) return;
@@ -995,6 +1003,10 @@ document.getElementById('btnActionAdd').onclick = async () => {
 document.getElementById('btnActionRemove').onclick = async () => {
   if (!adjustId) return;
   const item = inventory.find(x => x.id === adjustId);
+  if (item.quantity < adjustAmount) {
+      alert(`Cannot remove ${adjustAmount}. Only ${item.quantity} available.`);
+      return;
+  }
   await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(-adjustAmount) });
   await addDoc(collection(db, "reports"), {
     name: item.name, type: "SOLD", quantity: adjustAmount,
@@ -1006,237 +1018,72 @@ document.getElementById('btnActionRemove').onclick = async () => {
 };
 document.getElementById('btnAdjustCancel').onclick = () => { document.getElementById('adjustModal').style.display = 'none'; };
 
-// Bulk Action
+// Bulk Action Logic
 document.getElementById('btnOpenBulk').onclick = () => {
-  document.querySelector('#bulkTable tbody').innerHTML = ''; 
-  renderBulkTable(); document.getElementById('bulkModal').style.display = 'flex';
+  document.querySelector('#bulkTable tbody').innerHTML = ''; 
+  renderBulkTable(); document.getElementById('bulkModal').style.display = 'flex';
 };
 document.getElementById('btnBulkClose').onclick = () => { document.getElementById('bulkModal').style.display = 'none'; };
 
 function renderBulkTable() {
-  const tbody = document.querySelector('#bulkTable tbody');
-  const existingInputs = tbody.querySelectorAll('input[type="number"]');
-  const currentValues = {}; existingInputs.forEach(input => currentValues[input.id] = input.value);
-  
-  tbody.innerHTML = '';
-  inventory.forEach((item) => {
-    const tr = document.createElement('tr');
-    const inputId = `bulk-qty-${item.id}`;
-    const valToRender = currentValues[inputId] || 1;
-    tr.innerHTML = `
-      <td style="font-weight:bold;">${item.name} <span style="font-size:0.8em; color:#666;">(${item.unit})</span></td>
-      <td style="font-size:1.1em; text-align:center;">${item.quantity}</td>
-      <td>
-        <div style="display:flex; justify-content:center; gap:5px;">
-           <button class="btn" onclick="window.adjustBulkInput('${item.id}', -1)" style="padding:2px 8px;">-</button>
-           <input id="${inputId}" type="number" value="${valToRender}" min="1" style="width:50px; text-align:center;">
-           <button class="btn" onclick="window.adjustBulkInput('${item.id}', 1)" style="padding:2px 8px;">+</button>
-        </div>
-      </td>
-      <td>
-        <div style="display:flex; gap:5px; justify-content:center;">
-          <button class="btn" style="background:#2ecc71; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'add')">Add</button>
-          <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'remove')">Sold</button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+  const tbody = document.querySelector('#bulkTable tbody');
+  const existingInputs = tbody.querySelectorAll('input[type="number"]');
+  const currentValues = {}; existingInputs.forEach(input => currentValues[input.id] = input.value);
+  tbody.innerHTML = '';
+  inventory.forEach((item) => {
+    const tr = document.createElement('tr');
+    const inputId = `bulk-qty-${item.id}`;
+    const valToRender = currentValues[inputId] || 1;
+    tr.innerHTML = `
+      <td style="font-weight:bold;">${item.name}</td>
+      <td>${item.quantity}</td>
+      <td>
+        <div style="display:flex; justify-content:center; gap:5px;">
+           <button class="btn" onclick="window.adjustBulkInput('${item.id}', -1)">-</button>
+           <input id="${inputId}" type="number" value="${valToRender}" min="1" style="width:50px; text-align:center;">
+           <button class="btn" onclick="window.adjustBulkInput('${item.id}', 1)">+</button>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex; gap:5px; justify-content:center;">
+          <button class="btn" style="background:#2ecc71; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'add')">Add</button>
+          <button class="btn" style="background:#e74c3c; color:white; padding:5px 10px;" onclick="window.processBulkAction('${item.id}', 'remove')">Sold</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 window.adjustBulkInput = (id, change) => {
-  const input = document.getElementById(`bulk-qty-${id}`);
-  let val = parseInt(input.value) || 0; val += change; if(val < 1) val = 1; input.value = val;
+  const input = document.getElementById(`bulk-qty-${id}`);
+  let val = parseInt(input.value) || 0; val += change; if(val < 1) val = 1; input.value = val;
 };
 window.processBulkAction = async (id, action) => {
-  const item = inventory.find(x => x.id === id); const input = document.getElementById(`bulk-qty-${id}`);
-  const amount = parseInt(input.value) || 0; if (amount <= 0) return;
-  const ref = doc(db, "inventory", id);
-  
-  if (action === 'add') { 
-      await updateDoc(ref, { quantity: increment(amount) }); 
-      await addDoc(collection(db, "reports"), {
-        name: item.name, type: "RESTOCK", quantity: amount,
-        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-        timestamp: serverTimestamp()
-      });
-      logAudit("BULK_RESTOCK", `Added ${amount} to ${item.name}`);
-  } else { 
-      await updateDoc(ref, { quantity: increment(-amount) }); 
-      await addDoc(collection(db, "reports"), {
-        name: item.name, type: "SOLD", quantity: amount,
-        date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-        timestamp: serverTimestamp()
-      });
-      logAudit("BULK_REMOVE", `Removed ${amount} from ${item.name}`);
-  }
+  const item = inventory.find(x => x.id === id); const input = document.getElementById(`bulk-qty-${id}`);
+  const amount = parseInt(input.value) || 0; if (amount <= 0) return;
+  const ref = doc(db, "inventory", id);
+  if (action === 'add') { 
+      await updateDoc(ref, { quantity: increment(amount) }); 
+      await addDoc(collection(db, "reports"), {
+        name: item.name, type: "RESTOCK", quantity: amount, date: new Date().toISOString().split('T')[0], unitPrice: item.prices.pcs, timestamp: serverTimestamp()
+      });
+      logAudit("BULK_RESTOCK", `Added ${amount} to ${item.name}`);
+  } else { 
+      if (item.quantity < amount) {
+          alert(`Cannot remove ${amount}. Only ${item.quantity} in stock.`);
+          return;
+      }
+      await updateDoc(ref, { quantity: increment(-amount) }); 
+      await addDoc(collection(db, "reports"), {
+        name: item.name, type: "SOLD", quantity: amount, date: new Date().toISOString().split('T')[0], unitPrice: item.prices.pcs, timestamp: serverTimestamp()
+      });
+      logAudit("BULK_REMOVE", `Removed ${amount} from ${item.name}`);
+  }
 };
 
-// =============================
-// GLOBAL: CLICK OUTSIDE TO CLOSE MODALS
-// =============================
+// Global Click
 window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) {
-        event.target.style.display = "none";
-    }
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = "none";
+    }
 };
-
-// =============================
-// MISSING ACCOUNT LOGIC (PASTE THIS AFTER renderAccounts)
-// =============================
-
-// 1. OPEN CHANGE PASSWORD MODAL
-window.openChangePassword = (id, name) => {
-    currentPassId = id; // This global variable was defined at the top
-    document.getElementById('passAccountName').textContent = name;
-    document.getElementById('newPasswordInput').value = '';
-    document.getElementById('changePassModal').style.display = 'flex';
-};
-
-// 2. CONFIRM CHANGE PASSWORD BUTTON
-const btnConfirmPass = document.getElementById('btnConfirmChangePass');
-if (btnConfirmPass) {
-    btnConfirmPass.onclick = async () => {
-        const newPass = document.getElementById('newPasswordInput').value;
-        if (!newPass || newPass.length < 4) {
-            alert("Password must be at least 4 characters.");
-            return;
-        }
-        try {
-            await updateDoc(doc(db, "accounts", currentPassId), { password: newPass });
-            logAudit("CHANGE_PASS", `Updated password for user ID: ${currentPassId}`);
-            alert("Password updated successfully!");
-            document.getElementById('changePassModal').style.display = 'none';
-        } catch (e) {
-            console.error(e);
-            alert("Error updating password: " + e.message);
-        }
-    };
-}
-
-// 3. DELETE ACCOUNT
-window.deleteAccount = async (id, name) => {
-    if (confirm(`Are you sure you want to delete the account for "${name}"?`)) {
-        try {
-            await deleteDoc(doc(db, "accounts", id));
-            logAudit("DELETE_ACCOUNT", `Deleted user: ${name}`);
-        } catch (e) {
-            console.error(e);
-            alert("Error deleting account.");
-        }
-    }
-};
-
-// 4. OPEN ADD ACCOUNT MODAL
-const btnOpenAddAccount = document.getElementById('btnOpenAddAccount');
-if (btnOpenAddAccount) {
-    btnOpenAddAccount.onclick = () => {
-        document.getElementById('accName').value = '';
-        document.getElementById('accUsername').value = '';
-        document.getElementById('accPosition').value = '';
-        document.getElementById('accPassword').value = '';
-        document.getElementById('accRole').value = 'employee';
-        document.getElementById('accImageInput').value = '';
-        document.getElementById('accImagePreview').style.display = 'none';
-        document.getElementById('accNoImage').style.display = 'block';
-        document.getElementById('accountModal').style.display = 'flex';
-    };
-}
-
-// 5. CANCEL ACCOUNT MODAL
-const btnCancelAccount = document.getElementById('btnCancelAccount');
-if (btnCancelAccount) {
-    btnCancelAccount.onclick = () => {
-        document.getElementById('accountModal').style.display = 'none';
-    };
-}
-
-// 6. SAVE NEW ACCOUNT
-const btnSaveAccount = document.getElementById('btnSaveAccount');
-if (btnSaveAccount) {
-    btnSaveAccount.onclick = async () => {
-        const name = document.getElementById('accName').value.trim();
-        const username = document.getElementById('accUsername').value.trim();
-        const position = document.getElementById('accPosition').value.trim();
-        const password = document.getElementById('accPassword').value.trim();
-        const role = document.getElementById('accRole').value;
-        const fileInput = document.getElementById('accImageInput');
-
-        if (!name || !username || !password) {
-            alert("Name, Username, and Password are required.");
-            return;
-        }
-        if (accountsData.some(a => a.username === username)) {
-            alert("Username already taken.");
-            return;
-        }
-
-        let imageUri = "";
-        if (fileInput.files[0]) {
-            try {
-                imageUri = await toBase64(fileInput.files[0]);
-            } catch (e) {
-                alert("Image error: " + e.message);
-                return;
-            }
-        }
-
-        try {
-            await addDoc(collection(db, "accounts"), {
-                name,
-                username,
-                position,
-                password,
-                role,
-                imageUri,
-                createdAt: serverTimestamp()
-            });
-            logAudit("CREATE_ACCOUNT", `Created ${role}: ${username}`);
-            alert("Account Created!");
-            document.getElementById('accountModal').style.display = 'none';
-        } catch (e) {
-            console.error(e);
-            alert("Error creating account.");
-        }
-    };
-}
-
-// 7. PREVIEW ACCOUNT IMAGE
-const accImageInput = document.getElementById('accImageInput');
-if (accImageInput) {
-    accImageInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            try {
-                const base64 = await toBase64(file);
-                const img = document.getElementById('accImagePreview');
-                img.src = base64;
-                img.style.display = 'block';
-                document.getElementById('accNoImage').style.display = 'none';
-            } catch (err) {
-                alert(err.message);
-                e.target.value = '';
-            }
-        }
-    };
-}
-
-// --- EXPORT AUDIT LOGIC ---
-const btnExportAudit = document.getElementById('btnExportAudit');
-if(btnExportAudit) {
-    btnExportAudit.onclick = () => {
-        if(auditLogs.length === 0) { alert("No logs to export."); return; }
-        
-        let csv = 'Time,Actor,Action,Details\n';
-        auditLogs.forEach(log => {
-            const time = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '';
-            const details = log.details ? `"${log.details.replace(/"/g, '""')}"` : '';
-            csv += `${time},${log.actor},${log.action},${details}\n`;
-        });
-
-        const blob = new Blob([csv], {type: 'text/csv'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `AuditLogs_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-    };
-}
