@@ -15,6 +15,9 @@ function createWindow() {
     }
   });
 
+  // --- HIDE THE MENU BAR ---
+  mainWindow.setMenuBarVisibility(false);
+
   mainWindow.loadFile('index.html');
   // mainWindow.webContents.openDevTools();
 }

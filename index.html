@@ -10,7 +10,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
-  <link rel="stylesheet" href="modern.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
   <script type="importmap">
     {
@@ -22,93 +22,265 @@
   </script>
   
   <style>
-    .badge {
-      background: #e74c3c;
+    /* --- MODERN THEME VARIABLES --- */
+    :root {
+      --primary: #3b82f6;       /* Bright Blue */
+      --primary-dark: #2563eb;
+      --sidebar-bg: #0f172a;    /* Deep Navy */
+      --sidebar-hover: #1e293b;
+      --text-main: #334155;
+      --bg-body: #f1f5f9;       /* Light Grey */
+      --danger: #ef4444;
+      --success: #10b981;
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* --- LAYOUT --- */
+    .app { display: flex; height: 100vh; }
+
+    /* --- SIDEBAR --- */
+    .sidebar {
+      width: 260px;
+      background-color: var(--sidebar-bg);
       color: white;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 0.8em;
-      margin-left: 5px;
-      display: none; 
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: width 0.3s ease;
+      z-index: 100;
+    }
+
+    .sidebar-header {
+      padding: 25px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 10px;
+    }
+
+    .brand { font-size: 1.4rem; font-weight: 800; color: white; }
+    .brand span { color: var(--primary); }
+
+    #navList {
+      list-style: none;
+      padding: 0 15px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+    }
+
+    .nav-item {
+      padding: 12px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover { background-color: var(--sidebar-hover); color: white; }
+
+    .nav-item.active {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .sidebar-footer {
+      padding: 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .badge {
+      background: var(--danger);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      display: none;
     }
     .badge.show { display: inline-block; }
-    
-    .img-preview {
-        width: 100px;
-        height: 100px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-        margin-top: 10px;
-        display: none;
-    }
-    .img-preview.show { display: block; }
 
-    /* Pagination Styles */
-    .pagination-container {
+    /* --- MAIN CONTENT --- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 30px;
+      position: relative;
+    }
+
+    /* --- VIEWS --- */
+    .view { display: none; animation: fadeIn 0.3s ease; }
+    .view.active-view { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .view-header {
       display: flex;
-      justify-content: center;
-      padding: 15px;
-      gap: 5px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
     }
-    .page-btn {
+    .view-header h2 { margin: 0; color: #1e293b; font-size: 1.8rem; }
+
+    /* --- CARDS --- */
+    .card {
       background: white;
-      border: 1px solid #ddd;
-      color: #333;
-      padding: 5px 12px;
-      cursor: pointer;
-      border-radius: 4px;
-      font-weight: bold;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: var(--card-shadow);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 20px;
     }
-    .page-btn:hover { background-color: #f1f1f1; }
-    .page-btn.active {
-      background-color: #0F172A;
-      color: white;
-      border-color: #0F172A;
+    .card.full { width: 100%; overflow-x: auto; }
+
+    /* --- DASHBOARD GRIDS --- */
+    .cards { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    
+    /* --- TABLES --- */
+    .table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    .table th { 
+      text-align: left; padding: 12px 15px; 
+      background: #f8fafc; color: #64748b; font-weight: 600; 
+      border-bottom: 2px solid #e2e8f0; 
+    }
+    .table td { 
+      padding: 12px 15px; border-bottom: 1px solid #e2e8f0; 
+      vertical-align: middle; color: #334155;
+    }
+    .table tr:hover { background-color: #f8fafc; }
+
+    /* --- BUTTONS & INPUTS --- */
+    .btn {
+      padding: 10px 16px; border: none; border-radius: 6px;
+      cursor: pointer; font-weight: 600; font-size: 0.9rem;
+      transition: opacity 0.2s;
+      background: white; border: 1px solid #cbd5e1; color: #475569;
+    }
+    .btn:hover { opacity: 0.9; background: #f1f5f9; }
+    .btn.primary { background: var(--primary); color: white; border: none; }
+    
+    input, select { 
+      padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; 
+      outline: none; font-family: inherit; 
+    }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+    /* --- MODALS --- */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; 
+      width: 100%; height: 100%; background: rgba(0,0,0,0.5); 
+      justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-card {
+      background: white; padding: 30px; border-radius: 12px; 
+      width: 500px; max-width: 90%; 
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .form-grid { display: grid; gap: 15px; }
+    .three-cols { grid-template-columns: 1fr 1fr 1fr; }
+    
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: #64748b; }
+    input { width: 100%; }
+
+    /* --- MISC --- */
+    .img-preview { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; margin-top: 10px; border: 1px solid #eee; display: none; }
+    .img-preview.show { display: block; }
+    
+    .chart-scroll-area { max-height: 300px; overflow-y: auto; }
+    .chart-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9rem; }
+    .bar-container { flex: 1; background: #f1f5f9; height: 20px; border-radius: 4px; overflow: hidden; position: relative; }
+    .bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .bar-value { position: absolute; right: 5px; top: 0; font-size: 0.75rem; line-height: 20px; color: #334155; font-weight: bold; }
+
+    /* Login Styles */
+    .login-card { max-width: 400px; margin: 80px auto; text-align: center; }
+    .login-form input { margin-bottom: 15px; width: 100%; }
+    .login-form button { width: 100%; padding: 12px; font-size: 1rem; }
+    .error { color: var(--danger); margin-top: 10px; font-size: 0.9rem; }
+
+    /* Mobile Toggle */
+    #btnToggleSidebar {
+        display: none; position: fixed; bottom: 20px; right: 20px; z-index: 200;
+        background: var(--primary); color: white; border: none;
+        width: 50px; height: 50px; border-radius: 50%;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-size: 1.5rem;
     }
 
-    /* Account Modal Specifics */
-    .avatar-circle {
-        width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd;
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; left: -260px; height: 100%; }
+      .sidebar.active { left: 0; }
+      #btnToggleSidebar { display: flex; align-items: center; justify-content: center; }
+      .main { padding: 15px; }
+      .cards { grid-template-columns: 1fr; }
     }
-    .role-badge {
-        padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; color: white;
-    }
-    .role-owner { background: #8e44ad; }
-    .role-manager { background: #2980b9; }
-    .role-employee { background: #27ae60; }
   </style>
 </head>
 <body>
   <div class="app">
     <nav id="appSidebar" class="sidebar" style="display: none;">
-      <div class="brand">Inventory <span>Management</span></div>
-      <button id="btnToggleSidebar">☰</button>
+      <div class="sidebar-header">
+        <div class="brand">JDG <span>Inventory</span></div>
+      </div>
       <ul id="navList">
-        <li data-view="dashboard" class="nav-item active">📊 Dashboard</li>
-        <li data-view="requests" class="nav-item">🔔 Requests <span id="reqBadge" class="badge">0</span></li>
-        <li data-view="inventory" class="nav-item">📦 Inventory</li>
-        <li data-view="reports" class="nav-item">📑 Reports</li>
-        <li data-view="accounts" class="nav-item">👥 Accounts</li>
-        <li data-view="audit" class="nav-item">🛡️ Audit Trail</li>
-        <li id="logoutBtn" class="nav-item">🔓 Logout</li>
+        <li data-view="dashboard" class="nav-item active">
+            <span>📊 Dashboard</span>
+        </li>
+        <li data-view="requests" class="nav-item">
+            <span>🔔 Requests</span>
+            <span id="reqBadge" class="badge">0</span>
+        </li>
+        <li data-view="inventory" class="nav-item">
+            <span>📦 Inventory</span>
+        </li>
+        <li data-view="reports" class="nav-item">
+            <span>📑 Reports</span>
+        </li>
+        <li data-view="accounts" class="nav-item">
+            <span>👥 Accounts</span>
+        </li>
+        <li data-view="audit" class="nav-item">
+            <span>🛡️ Audit Trail</span>
+        </li>
+        <li style="flex:1"></li>
+        <li id="logoutBtn" class="nav-item" style="color: #ef4444;">
+            <span>🔓 Logout</span>
+        </li>
       </ul>
       <footer class="sidebar-footer">
-        <small>Logged in as: <b id="currentUserLabel">-</b></small>
+        <small>User: <b id="currentUserLabel">-</b></small>
       </footer>
     </nav>
 
+    <button id="btnToggleSidebar" style="display: none;">☰</button>
+
     <main class="main">
+      
       <section id="view-login" class="view active-view">
-        <div class="login-card">
-          <h1>Inventory Management System</h1>
-          <p class="muted">Sign in as admin or Inventory Manager</p>
+        <div class="login-card card">
+          <h2 style="color: var(--sidebar-bg);">Welcome Back</h2>
+          <p style="color: #64748b; margin-bottom: 25px;">Sign in to manage inventory</p>
           <div class="login-form">
-            <label>Username<input id="loginUsername" placeholder="admin or manager" /></label>
-            <label>Password<input id="loginPassword" type="password" placeholder="password" /></label>
-            <div class="row">
-              <button id="btnLogin" class="btn primary">Login</button>
-            </div>
+            <input id="loginUsername" placeholder="Username" />
+            <input id="loginPassword" type="password" placeholder="Password" />
+            <button id="btnLogin" class="btn primary">Login</button>
             <div id="loginError" class="error"></div>
           </div>
         </div>
@@ -117,25 +289,25 @@
       <section id="view-dashboard" class="view">
         <header class="view-header">
           <h2>Dashboard</h2>
-          <div class="small-info">
-            <div>Total Items: <b id="totalItems">0</b></div>
-            <div style="margin-left: 15px;">Pending Requests: <b id="totalPending">0</b></div>
+          <div style="font-size: 0.9rem; color: #64748b;">
+            <span style="margin-right: 15px;">Total Items: <b id="totalItems" style="color: var(--primary);">0</b></span>
+            <span>Pending Requests: <b id="totalPending" style="color: var(--danger);">0</b></span>
           </div>
         </header>
 
         <div class="cards">
-            <div class="card graph-card">
-                <h3>Current Stock Levels</h3>
-                <div class="chart-header-row">
-                    <div style="width: 130px; text-align:right; padding-right:15px;">Item Name</div>
-                    <div style="flex:1; padding-left: 5px;">Quantity</div>
+            <div class="card">
+                <h3 style="margin-top:0;">Stock Levels</h3>
+                <div class="chart-header-row" style="display:flex; font-size:0.8rem; color:#94a3b8; margin-bottom:10px;">
+                    <div style="width: 120px; text-align:right; padding-right:15px;">Item</div>
+                    <div style="flex:1;">Quantity Bar</div>
                 </div>
                 <div id="scrollableChart" class="chart-scroll-area"></div>
             </div>
 
             <div class="card">
-                <h3>Low Stock Alerts</h3>
-                <ul id="alertsList" class="alerts"></ul>
+                <h3 style="margin-top:0; color:var(--danger);">Low Stock Alerts</h3>
+                <ul id="alertsList" style="padding-left: 20px; color: #475569; font-size: 0.9rem;"></ul>
             </div>
         </div> 
       </section>
@@ -143,13 +315,14 @@
       <section id="view-requests" class="view">
         <header class="view-header">
           <h2>Borrow Requests</h2>
-          <div style="display: flex; gap: 5px; align-items: center;">
-            <input type="date" id="reqReportDate" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;" />
-            <button id="btnReqPdf" class="btn" style="background:#e74c3c; color:white; margin-right: 15px;">📄 PDF</button>
-            
-            <button class="btn" onclick="window.setRequestFilter('ALL')">All</button>
-            <button class="btn" style="background:#f39c12; color:white;" onclick="window.setRequestFilter('PENDING')">Pending</button>
-            <button class="btn" style="background:#27ae60; color:white;" onclick="window.setRequestFilter('APPROVED')">Approved</button>
+          <div style="display: flex; gap: 8px;">
+            <input type="date" id="reqReportDate" />
+            <button id="btnReqPdf" class="btn">📄 PDF</button>
+            <select onchange="window.setRequestFilter(this.value)" class="btn">
+                <option value="ALL">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+            </select>
           </div>
         </header>
         <div class="card full">
@@ -173,22 +346,18 @@
       <section id="view-inventory" class="view">
         <header class="view-header">
             <h2>Inventory</h2>
-            <div class="actions"> 
-              <select id="sortInventory" class="btn" style="margin-right: 10px; border: 1px solid #ccc; background: white;">
-                <option value="alpha">Alphabetical (A-Z)</option>
-                <option value="type">Type (Equip/Consumable)</option>
-                <option value="qtyLow">Quantity (Low to High)</option>
-                <option value="qtyHigh">Quantity (High to Low)</option>
-                <option value="dateNew">Date (Newest First)</option>
+            <div style="display:flex; gap: 10px;"> 
+              <select id="sortInventory" class="btn">
+                <option value="alpha">A-Z</option>
+                <option value="qtyLow">Qty Low</option>
+                <option value="qtyHigh">Qty High</option>
+                <option value="dateNew">Newest</option>
               </select>
-
-              <button id="btnOpenBulk" class="btn" style="background:#8e44ad; color:white; margin-right:10px;">
-                ⚡ Rapid Adjust
-              </button>
+              <button id="btnOpenBulk" class="btn" style="background:#8b5cf6; color:white;">⚡ Bulk</button>
               <button id="btnAddItem" class="btn primary">➕ Add Item</button>
             </div> 
         </header>
-        <input id="inventorySearch" type="text" placeholder="Search items..." class="search-bar" />
+        <input id="inventorySearch" type="text" placeholder="Search inventory..." style="width: 100%; margin-bottom: 20px;" />
         <div class="card full">
           <table id="inventoryTable" class="table">
           <thead>
@@ -208,15 +377,14 @@
 
       <section id="view-reports" class="view">
         <header class="view-header">
-          <h2>Reports (History)</h2>
+          <h2>Reports History</h2>
           <div>
-            <select id="sortReports" class="btn" style="margin-right: 10px; border: 1px solid #ccc; background: white;">
-              <option value="dateNew">Date (Newest First)</option>
-              <option value="dateOld">Date (Oldest First)</option>
+            <select id="sortReports" class="btn">
+              <option value="dateNew">Newest</option>
+              <option value="dateOld">Oldest</option>
             </select>
-
-            <button id="btnPrint" class="btn">🖨️ Print</button>
-            <button id="btnExportCsv" class="btn">Export to CSV</button>
+            <button id="btnPrint" class="btn">🖨️</button>
+            <button id="btnExportCsv" class="btn">CSV</button>
           </div>
         </header>
         <div class="card full">
@@ -237,15 +405,14 @@
 
       <section id="view-accounts" class="view">
         <header class="view-header">
-            <h2>Account Manager</h2>
-            <button id="btnOpenAddAccount" class="btn" style="background:#3498db; color:white;">+ New Employee</button>
+            <h2>Accounts</h2>
+            <button id="btnOpenAddAccount" class="btn primary">+ New User</button>
         </header>
-        
         <div class="card full">
             <table id="accountsTable" class="table">
                 <thead>
                     <tr>
-                        <th width="80">Photo</th>
+                        <th width="60"></th>
                         <th>Name</th>
                         <th>Username</th>
                         <th>Position</th>
@@ -260,13 +427,12 @@
 
       <section id="view-audit" class="view">
         <header class="view-header">
-          <h2>System Audit Logs</h2>
+          <h2>Audit Logs</h2>
           <div style="display:flex; gap:10px;">
-              <input type="text" id="auditSearch" placeholder="Search logs..." style="padding:8px; border-radius:4px; border:1px solid #ccc;">
-              <button id="btnExportAudit" class="btn" style="background:#34495e; color:white;">Export Log</button>
+              <input type="text" id="auditSearch" placeholder="Search logs..." />
+              <button id="btnExportAudit" class="btn">Export</button>
           </div>
         </header>
-        
         <div class="card full">
           <table id="auditTable" class="table">
             <thead>
@@ -287,19 +453,17 @@
 
   <div id="modal" class="modal">
     <div class="modal-card">
-      <h3 id="modalTitle">Item Details</h3>
+      <h3 id="modalTitle" style="margin-top:0;">Item Details</h3>
       <div class="form-grid">
-        <label>Product Name <input id="mName" /></label>
-        
-        <label>Item Type 
-          <select id="mType" style="border: 2px solid #3498db; background: #ebf8ff;">
-            <option value="EQUIPMENT">🔧 EQUIPMENT (Returnable)</option>
-            <option value="CONSUMABLE">🔩 CONSUMABLE (One-time)</option>
+        <label>Name <input id="mName" /></label>
+        <label>Type 
+          <select id="mType">
+            <option value="CONSUMABLE">🔩 Consumable</option>
+            <option value="EQUIPMENT">🔧 Equipment</option>
           </select>
         </label>
-
-        <label>Category <input id="mCategory" placeholder="e.g. Tools" /></label>
-        <label>Quantity <input id="mQuantity" type="number" min="0" /></label>
+        <label>Category <input id="mCategory" /></label>
+        <label>Qty <input id="mQuantity" type="number" /></label>
         <label>Unit 
           <select id="mUnit">
             <option value="pcs">pcs</option>
@@ -310,124 +474,114 @@
         </label>
       </div>
       
-      <label style="display:block; margin-top:10px;">Description
-        <textarea id="mDescription" style="width:100%; border:1px solid #ddd; padding:8px; border-radius:4px;" rows="2" placeholder="Item description..."></textarea>
+      <label style="margin-top:10px;">Description
+        <textarea id="mDescription" style="width:100%; border:1px solid #cbd5e1; border-radius:6px; padding:8px;" rows="2"></textarea>
       </label>
+      
       <div style="margin-top:10px;">
-        <label>Item Image</label>
-        <input type="file" id="mImageFile" accept="image/*" style="margin-top:5px;">
+        <input type="file" id="mImageFile" accept="image/*">
         <img id="mImagePreview" class="img-preview" src="" />
       </div>
-      <h4 style="margin: 15px 0 5px 0;">Unit Prices</h4>
+
+      <h4 style="margin: 15px 0 5px 0; font-size:0.9rem;">Prices</h4>
       <div class="form-grid three-cols">
-        <label>Price Per PCS <input id="mPricePCS" type="number" min="0" step="0.01" /></label>
-        <label>Price Per BOX <input id="mPriceBOX" type="number" min="0" step="0.01" /></label>
-        <label>Price Per TUB <input id="mPriceTUB" type="number" min="0" step="0.01" /></label>
+        <label>Pcs <input id="mPricePCS" type="number" step="0.01" /></label>
+        <label>Box <input id="mPriceBOX" type="number" step="0.01" /></label>
+        <label>Tub <input id="mPriceTUB" type="number" step="0.01" /></label>
       </div>
-      <div class="modal-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
-        <button id="btnDeleteItem" class="btn" style="background: #e74c3c; color: white; display: none;">Delete</button>
-        <div style="display: flex; gap: 10px;">
-          <button id="btnGenerateQR" class="btn primary">Generate QR</button>
-          <div id="qrContainer" class="qr-container"></div>
-          <button id="btnSaveItem" class="btn btn-save">Save Item</button>
-        </div>
+
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btnDeleteItem" class="btn" style="background: var(--danger); color: white; margin-right:auto; display:none;">Delete</button>
+        <button id="btnGenerateQR" class="btn">Generate QR</button>
+        <button id="btnSaveItem" class="btn primary">Save</button>
       </div>
-      <div class="row">
-        <button id="modalCancel" class="btn" style="width:100%">Cancel</button>
+      
+      <div id="qrContainer" style="text-align:center; margin-top:10px;"></div>
+      <button id="modalCancel" class="btn" style="width:100%; margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+
+  <div id="adjustModal" class="modal">
+    <div class="modal-card" style="width: 400px; text-align: center;">
+      <h3>Adjust: <span id="adjustName" style="color: var(--primary);"></span></h3>
+      <p>Current: <b id="adjustCurrentStock"></b></p>
+      
+      <div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0;">
+        <button id="btnAdjMinus" class="btn" style="font-size: 1.2rem; width: 40px;">-</button>
+        <input id="adjustInput" type="number" value="1" style="width: 80px; text-align: center; font-size: 1.2rem;" readonly>
+        <button id="btnAdjPlus" class="btn" style="font-size: 1.2rem; width: 40px;">+</button>
       </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button id="btnActionAdd" class="btn" style="background: var(--success); color: white; flex: 1;">Restock (+)</button>
+        <button id="btnActionRemove" class="btn" style="background: var(--danger); color: white; flex: 1;">Remove (-)</button>
+      </div>
+      <button id="btnAdjustCancel" class="btn" style="width: 100%; margin-top: 10px;">Cancel</button>
     </div>
   </div>
 
   <div id="accountModal" class="modal">
-    <div class="modal-card" style="width: 350px; text-align: center;">
-        <h3>New Employee</h3>
-        <div style="margin: 20px auto; width: 100px; height: 100px; border-radius: 50%; background: #ecf0f1; position: relative; overflow: hidden; border: 2px solid #bdc3c7;">
-            <img id="accImagePreview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-            <div id="accNoImage" style="line-height: 100px; color: #7f8c8d;">Photo</div>
+    <div class="modal-card" style="width: 350px;">
+        <h3 style="text-align:center;">New User</h3>
+        <div style="text-align:center; margin-bottom:15px;">
+            <div style="width:80px; height:80px; background:#f1f5f9; border-radius:50%; margin:0 auto; overflow:hidden;">
+                <img id="accImagePreview" style="width:100%; height:100%; object-fit:cover; display:none;">
+                <span id="accNoImage" style="line-height:80px; color:#94a3b8;">Photo</span>
+            </div>
+            <input type="file" id="accImageInput" style="margin-top:10px; font-size:0.8rem;">
         </div>
-        <input type="file" id="accImageInput" accept="image/*" style="margin-bottom: 15px;">
-        <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
-            <label>Full Name <input id="accName" class="form-control" style="width: 100%; padding: 8px;" /></label>
-            <label>Username <input id="accUsername" class="form-control" style="width: 100%; padding: 8px;" /></label>
-            <label>Position <input id="accPosition" class="form-control" style="width: 100%; padding: 8px;" /></label>
-            <label>Password <input id="accPassword" type="password" class="form-control" style="width: 100%; padding: 8px;" /></label>
-            <label>Role 
-                <select id="accRole" style="width: 100%; padding: 8px;">
-                    <option value="employee">Employee</option>
-                    <option value="manager">Manager</option>
-                    <option value="owner">Owner</option>
-                </select>
-            </label>
+        <div class="form-grid">
+            <input id="accName" placeholder="Full Name" />
+            <input id="accUsername" placeholder="Username" />
+            <input id="accPosition" placeholder="Position" />
+            <input id="accPassword" type="password" placeholder="Password" />
+            <select id="accRole">
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="owner">Owner</option>
+            </select>
         </div>
-        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-            <button id="btnSaveAccount" class="btn" style="background: #3498db; color: white; width: 100%;">CREATE ACCOUNT</button>
-            <button id="btnCancelAccount" class="btn" style="background: #e74c3c; color: white; width: 100%;">BACK TO ACCOUNTS</button>
-        </div>
+        <button id="btnSaveAccount" class="btn primary" style="width:100%; margin-top:20px;">Create</button>
+        <button id="btnCancelAccount" class="btn" style="width:100%; margin-top:10px;">Cancel</button>
     </div>
   </div>
 
   <div id="changePassModal" class="modal">
     <div class="modal-card" style="width: 300px;">
-      <h3 style="margin-bottom: 15px;">Change Password</h3>
-      <p class="muted" style="margin-bottom: 15px;">Enter new password for <b id="passAccountName"></b></p>
-      <label>New Password
-        <input type="password" id="newPasswordInput" class="form-control" placeholder="Type new password..." style="width: 100%; padding: 8px; margin-top: 5px;">
-      </label>
-      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-        <button id="btnConfirmChangePass" class="btn" style="background: #e67e22; color: white; width: 100%;">UPDATE PASSWORD</button>
-        <button onclick="document.getElementById('changePassModal').style.display='none'" class="btn" style="background: #95a5a6; color: white; width: 100%;">CANCEL</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="viewItemModal" class="modal">
-    <div class="modal-card">
-      <h3 id="viewItemTitle">Product Name</h3>
-      <div style="text-align:center; background:#f9f9f9; padding:10px; border-radius:8px;">
-        <img id="viewItemImage" style="max-width:100%; max-height:300px; display:none; border-radius:4px;" />
-        <p id="viewItemNoImage" style="color:#aaa;">No Image Available</p>
-      </div>
-      <div style="margin-top:15px;">
-        <label style="font-weight:bold;">Description:</label>
-        <p id="viewItemDesc" style="color:#555; background:#fff; padding:10px; border:1px solid #eee; border-radius:4px;">No description.</p>
-      </div>
-      <div class="row" style="margin-top:20px;">
-        <button onclick="document.getElementById('viewItemModal').style.display='none'" class="btn" style="width:100%">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="adjustModal" class="modal">
-    <div class="modal-card">
-      <h3>Adjust Stock: <span id="adjustName" style="color: #3498db;"></span></h3>
-      <p>Current In Stock: <b id="adjustCurrentStock" style="font-size: 1.2rem;"></b></p>
-      <div class="quantity-control" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0;">
-        <button id="btnAdjMinus" class="btn" style="font-size: 1.5rem; width: 45px;">-</button>
-        <input id="adjustInput" type="number" value="1" style="width: 80px; text-align: center; font-size: 1.5rem; padding: 5px;" readonly>
-        <button id="btnAdjPlus" class="btn" style="font-size: 1.5rem; width: 45px;">+</button>
-      </div>
-      <div class="modal-actions" style="display: flex; gap: 10px; justify-content: center;">
-        <button id="btnActionAdd" class="btn" style="background-color: #2ecc71; color: white; flex: 1; padding: 10px;">📥 RESTOCK (Add)</button>
-        <button id="btnActionRemove" class="btn" style="background-color: #e74c3c; color: white; flex: 1; padding: 10px;">📤 GET (Remove)</button>
-      </div>
-      <div class="row" style="margin-top: 15px;">
-        <button id="btnAdjustCancel" class="btn" style="width: 100%;">Cancel</button>
-      </div>
+      <h3>Change Password</h3>
+      <p style="color:#64748b;">For: <b id="passAccountName"></b></p>
+      <input type="password" id="newPasswordInput" placeholder="New Password" style="margin: 15px 0;" />
+      <button id="btnConfirmChangePass" class="btn primary" style="width:100%;">Update</button>
+      <button onclick="document.getElementById('changePassModal').style.display='none'" class="btn" style="width:100%; margin-top:10px;">Cancel</button>
     </div>
   </div>
 
   <div id="bulkModal" class="modal">
-    <div class="modal-card" style="min-width: 600px; max-width: 90%;">
-      <h3>Rapid Stock Adjustment</h3>
-      <div style="max-height: 60vh; overflow-y: auto; margin: 15px 0; border: 1px solid #eee;">
+    <div class="modal-card" style="width: 700px; max-width: 95%;">
+      <h3>Rapid Adjust</h3>
+      <div style="height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; margin: 15px 0;">
         <table class="table" id="bulkTable">
-          <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
-            <tr><th>Item Name</th><th style="width: 80px;">Current</th><th style="width: 150px; text-align:center;">Amount</th><th style="text-align:center;">Action</th></tr>
+          <thead style="position: sticky; top: 0; z-index: 10;">
+            <tr><th>Item</th><th>Current</th><th>Adj Amt</th><th>Action</th></tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="row"><button id="btnBulkClose" class="btn" style="width: 100%;">Done / Close</button></div>
+      <button id="btnBulkClose" class="btn primary" style="width: 100%;">Done</button>
+    </div>
+  </div>
+
+  <div id="viewItemModal" class="modal">
+    <div class="modal-card" style="width: 400px;">
+      <h3 id="viewItemTitle"></h3>
+      <div style="text-align:center; background:#f8fafc; padding:10px; border-radius:8px; margin-bottom:15px;">
+        <img id="viewItemImage" style="max-width:100%; max-height:250px; display:none;" />
+        <p id="viewItemNoImage" style="color:#94a3b8;">No Image</p>
+      </div>
+      <div style="background:#f1f5f9; padding:15px; border-radius:8px;">
+        <p id="viewItemDesc" style="margin:0; color:#475569;"></p>
+      </div>
+      <button onclick="document.getElementById('viewItemModal').style.display='none'" class="btn" style="width:100%; margin-top:20px;">Close</button>
     </div>
   </div>
 
