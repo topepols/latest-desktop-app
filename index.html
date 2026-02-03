@@ -496,8 +496,22 @@
         <button id="btnSaveItem" class="btn primary">Save</button>
       </div>
       
-      <div id="qrContainer" style="text-align:center; margin-top:10px;"></div>
       <button id="modalCancel" class="btn" style="width:100%; margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+
+  <div id="qrModal" class="modal">
+    <div class="modal-card" style="width: 350px; text-align: center;">
+      <h3 style="margin-top: 0;">Item QR Code</h3>
+      
+      <div id="qrDisplayArea" style="margin: 20px auto; padding: 10px; border: 1px solid #e2e8f0; display: inline-block; border-radius: 8px;"></div>
+      
+      <p id="qrItemName" style="color: #64748B; font-weight: bold; margin-bottom: 20px;"></p>
+
+      <div style="display: flex; gap: 10px;">
+        <button id="btnDownloadQR" class="btn primary" style="flex: 1;">⬇ Save Image</button>
+        <button id="btnCloseQR" class="btn" style="flex: 1;">Back</button>
+      </div>
     </div>
   </div>
 
