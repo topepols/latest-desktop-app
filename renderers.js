@@ -113,7 +113,6 @@ window.handleLogin = () => {
     switchView('dashboard');
     document.getElementById('loginUsername').value = '';
     document.getElementById('loginPassword').value = '';
-    
     logAudit("LOGIN", `User ${u} logged in.`);
   } else {
     document.getElementById('loginError').textContent = 'Invalid credentials';
@@ -173,6 +172,7 @@ function switchView(view) {
 // 5. REQUESTS LOGIC (WITH BULK ACCEPT)
 // =============================
 
+// Single Request Processing
 window.processRequest = async (reqId, action, showAlert = true) => {
   const req = requests.find(r => r.id === reqId);
   if (!req) { if(showAlert) alert("Request not found."); return; }
@@ -184,6 +184,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
         if(showAlert) alert("Request Declined.");
       } 
       else if (action === 'APPROVE') {
+        // --- CHECK STOCK ---
         const itemRef = doc(db, "inventory", req.itemId);
         const itemSnap = await getDoc(itemRef);
         
@@ -220,6 +221,7 @@ window.processRequest = async (reqId, action, showAlert = true) => {
   }
 };
 
+// --- BULK ACTION LOGIC ---
 window.processGroupAction = async (username, action) => {
     const pending = requests.filter(r => r.requestorUsername === username && r.status === 'PENDING');
     if (pending.length === 0) return;
@@ -441,7 +443,7 @@ function renderPagination(totalPages) {
 }
 
 // =============================
-// 6. INVENTORY LOGIC
+// 6. INVENTORY LOGIC (UPDATED WITH DESCRIPTION)
 // =============================
 document.getElementById('sortInventory').addEventListener('change', renderInventory);
 document.getElementById('inventorySearch').addEventListener('input', renderInventory);
@@ -465,6 +467,7 @@ function renderInventory() {
 
   filtered.forEach((item) => {
     const tr = document.createElement('tr');
+    
     let typeBadge = `<span style="background:#95a5a6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">?</span>`;
     if (item.type === 'EQUIPMENT') typeBadge = `<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">🔧 EQUIP</span>`;
     if (item.type === 'CONSUMABLE') typeBadge = `<span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">🔩 CONSUM</span>`;
@@ -472,19 +475,25 @@ function renderInventory() {
     const unitKey = (item.unit || 'pcs').toLowerCase(); 
     const unitPrice = item.prices ? (item.prices[unitKey] || 0) : 0;
 
+    // --- DESCRIPTION HTML ---
+    const descHtml = item.description 
+        ? `<div style="font-size:0.85em; color:#64748b; font-style:italic; margin-top:3px;">${item.description}</div>` 
+        : '';
+    
+    // --- IMAGE TOOLTIP ATTRIBUTE ---
+    const tooltipAttr = item.imageUrl ? `data-tooltip-img="${item.imageUrl}"` : '';
+
     tr.innerHTML = `
       <td>${typeBadge}</td>
-      <td style="font-weight:bold; color:#2c3e50;">${item.name}</td>
+      <td>
+        <div ${tooltipAttr} style="font-weight:bold; color:#2c3e50; cursor:help; display:inline-block;">
+            ${item.name}
+        </div>
+        ${descHtml}
+      </td>
       <td>${item.category || '-'}</td>
       <td style="font-size:1.1em;">${item.quantity} <small style="color:#7f8c8d;">${item.unit}</small></td>
       <td><small style="font-weight:bold; color:#27ae60;">${formatCurrency(unitPrice)}</small></td>
-      <td>
-        <div style="display: flex; gap: 5px;">
-            <button class="btn" style="background:#34495e; color:white; padding: 5px 10px;" onclick="window.viewItem('${item.id}')">👁️</button>
-            <button class="btn" onclick="window.editItem('${item.id}')">Edit</button>
-            <button class="btn" style="background:#2ecc71; color:white;" onclick="window.openAdjust('${item.id}')">Adj</button>
-        </div>
-      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -825,6 +834,7 @@ document.getElementById('btnReqPdf').onclick = () => {
 };
 
 document.getElementById('btnPrint').onclick = () => { window.print(); };
+
 document.getElementById('btnExportCsv').onclick = () => {
   let csv = 'Product Name,Action,Quantity,Date,Value\n';
   reports.forEach(x => {
@@ -853,97 +863,10 @@ window.openAddItem = () => {
   document.getElementById('modal').style.display = 'flex';
 };
 document.getElementById('btnAddItem').onclick = window.openAddItem;
+
 window.closeModal = () => { document.getElementById('modal').style.display = 'none'; };
 document.getElementById('modalCancel').onclick = window.closeModal;
 
-window.viewItem = (id) => {
-    const item = inventory.find(x => x.id === id);
-    if(!item) return;
-    document.getElementById('viewItemTitle').textContent = item.name;
-    document.getElementById('viewItemDesc').textContent = item.description || "No description provided.";
-    const img = document.getElementById('viewItemImage');
-    const noImg = document.getElementById('viewItemNoImage');
-    if (item.imageUrl) {
-        img.src = item.imageUrl; img.style.display = 'block'; noImg.style.display = 'none';
-    } else {
-        img.style.display = 'none'; noImg.style.display = 'block';
-    }
-    document.getElementById('viewItemModal').style.display = 'flex';
-};
-
-window.editItem = (id) => {
-  const item = inventory.find(x => x.id === id);
-  if(!item) return;
-  currentEditId = id;
-  document.getElementById('modalTitle').textContent = 'Edit Item';
-  document.getElementById('btnDeleteItem').style.display = 'block';
-  document.getElementById('mName').value = item.name;
-  document.getElementById('mCategory').value = item.category || '';
-  document.getElementById('mType').value = item.type || 'CONSUMABLE';
-  document.getElementById('mQuantity').value = item.quantity;
-  document.getElementById('mDescription').value = item.description || '';
-  const preview = document.getElementById('mImagePreview');
-  if(item.imageUrl) { preview.src = item.imageUrl; preview.classList.add('show'); } 
-  else { preview.classList.remove('show'); preview.src = ''; }
-  document.getElementById('mUnit').value = item.unit; 
-  document.getElementById('mPricePCS').value = item.prices.pcs;
-  document.getElementById('mPriceBOX').value = item.prices.box;
-  document.getElementById('mPriceTUB').value = item.prices.tub;
-  document.getElementById('modal').style.display = 'flex';
-};
-
-document.getElementById('btnSaveItem').onclick = async () => {
-  const name = document.getElementById('mName').value;
-  const type = document.getElementById('mType').value;
-  const category = document.getElementById('mCategory').value; 
-  const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
-  const unit = document.getElementById('mUnit').value; 
-  const description = document.getElementById('mDescription').value;
-  const imageFile = document.getElementById('mImageFile').files[0];
-  const prices = {
-    pcs: parseFloat(document.getElementById('mPricePCS').value) || 0,
-    box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
-    tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
-  };
-  if (!name) { alert('Name is required.'); return; }
-  let imageUrl = null;
-  if (imageFile) { try { imageUrl = await toBase64(imageFile); } catch(e) { alert(e.message); return; } }
-  const itemData = { name, type, category, quantity, unit, prices, description, date: new Date().toISOString().split('T')[0] };
-  if (imageUrl) itemData.imageUrl = imageUrl;
-  else if (currentEditId) {
-      const existing = inventory.find(i => i.id === currentEditId);
-      if(existing && existing.imageUrl) itemData.imageUrl = existing.imageUrl;
-  }
-  try {
-    if (currentEditId) {
-        await updateDoc(doc(db, "inventory", currentEditId), itemData);
-        logAudit("UPDATE ITEM", `Updated: ${name}`);
-    } else { 
-        await addDoc(collection(db, "inventory"), itemData); 
-        await addDoc(collection(db, "reports"), {
-            name: itemData.name, type: "NEW ITEM", quantity: itemData.quantity,
-            date: new Date().toISOString().split('T')[0], unitPrice: 0, prices: itemData.prices,
-            timestamp: serverTimestamp()
-        });
-        logAudit("CREATE ITEM", `Created: ${name}`);
-    }
-    window.closeModal();
-  } catch (e) { console.error(e); alert("Error saving: " + e.message); }
-};
-
-document.getElementById('btnDeleteItem').onclick = async () => {
-  if (!currentEditId) return;
-  if (confirm("Permanently delete this item?")) {
-    try {
-      const item = inventory.find(i => i.id === currentEditId);
-      await deleteDoc(doc(db, "inventory", currentEditId));
-      logAudit("DELETE_ITEM", `Deleted: ${item ? item.name : currentEditId}`);
-      window.closeModal();
-    } catch (e) { alert("Error deleting."); }
-  }
-};
-
-// QR
 document.getElementById('btnGenerateQR').onclick = async () => {
     const name = document.getElementById('mName').value;
     if(!name) { alert("Enter product name."); return; }
@@ -975,50 +898,64 @@ document.getElementById('btnDownloadQR').onclick = () => {
 };
 document.getElementById('btnCloseQR').onclick = () => { document.getElementById('qrModal').style.display = 'none'; };
 
-// Adjust Stock Modal
-let adjustId = null; let adjustAmount = 1;
-window.openAdjust = (id) => {
-  const item = inventory.find(x => x.id === id); if(!item) return;
-  adjustId = id; adjustAmount = 1;
-  document.getElementById('adjustName').textContent = item.name;
-  document.getElementById('adjustCurrentStock').textContent = item.quantity;
-  document.getElementById('adjustInput').value = adjustAmount;
-  document.getElementById('adjustModal').style.display = 'flex';
-};
-document.getElementById('btnAdjPlus').onclick = () => { adjustAmount++; document.getElementById('adjustInput').value = adjustAmount; };
-document.getElementById('btnAdjMinus').onclick = () => { if (adjustAmount > 1) adjustAmount--; document.getElementById('adjustInput').value = adjustAmount; };
+// Save Item
+document.getElementById('btnSaveItem').onclick = async () => {
+  const name = document.getElementById('mName').value;
+  const type = document.getElementById('mType').value;
+  const category = document.getElementById('mCategory').value; 
+  const quantity = parseInt(document.getElementById('mQuantity').value) || 0;
+  const unit = document.getElementById('mUnit').value; 
+  const description = document.getElementById('mDescription').value;
+  const imageFile = document.getElementById('mImageFile').files[0];
+  const prices = {
+    pcs: parseFloat(document.getElementById('mPricePCS').value) || 0,
+    box: parseFloat(document.getElementById('mPriceBOX').value) || 0,
+    tub: parseFloat(document.getElementById('mPriceTUB').value) || 0
+  };
 
-document.getElementById('btnActionAdd').onclick = async () => {
-  if (!adjustId) return;
-  const item = inventory.find(x => x.id === adjustId);
-  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(adjustAmount) });
-  await addDoc(collection(db, "reports"), {
-    name: item.name, type: "RESTOCK", quantity: adjustAmount,
-    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-    timestamp: serverTimestamp()
-  });
-  logAudit("RESTOCK", `Added ${adjustAmount} to ${item.name}`);
-  document.getElementById('adjustModal').style.display = 'none';
-};
-document.getElementById('btnActionRemove').onclick = async () => {
-  if (!adjustId) return;
-  const item = inventory.find(x => x.id === adjustId);
-  if (item.quantity < adjustAmount) {
-      alert(`Cannot remove ${adjustAmount}. Only ${item.quantity} available.`);
-      return;
+  if (!name) { alert('Name is required.'); return; }
+  let imageUrl = null;
+  if (imageFile) { try { imageUrl = await toBase64(imageFile); } catch(e) { alert(e.message); return; } }
+
+  const itemData = { name, type, category, quantity, unit, prices, description, date: new Date().toISOString().split('T')[0] };
+  if (imageUrl) itemData.imageUrl = imageUrl;
+  else if (currentEditId) {
+      const existing = inventory.find(i => i.id === currentEditId);
+      if(existing && existing.imageUrl) itemData.imageUrl = existing.imageUrl;
   }
-  await updateDoc(doc(db, "inventory", adjustId), { quantity: increment(-adjustAmount) });
-  await addDoc(collection(db, "reports"), {
-    name: item.name, type: "SOLD", quantity: adjustAmount,
-    date: new Date().toISOString().split('T')[0], unitPrice: item.prices[item.unit] || 0, prices: item.prices,
-    timestamp: serverTimestamp()
-  });
-  logAudit("REMOVE", `Removed ${adjustAmount} from ${item.name}`);
-  document.getElementById('adjustModal').style.display = 'none';
-};
-document.getElementById('btnAdjustCancel').onclick = () => { document.getElementById('adjustModal').style.display = 'none'; };
 
-// Bulk Action Logic
+  try {
+    if (currentEditId) {
+        await updateDoc(doc(db, "inventory", currentEditId), itemData);
+        logAudit("UPDATE ITEM", `Updated: ${name}`);
+    } else { 
+        await addDoc(collection(db, "inventory"), itemData); 
+        await addDoc(collection(db, "reports"), {
+            name: itemData.name, type: "NEW ITEM", quantity: itemData.quantity,
+            date: new Date().toISOString().split('T')[0], unitPrice: 0, prices: itemData.prices,
+            timestamp: serverTimestamp()
+        });
+        logAudit("CREATE ITEM", `Created: ${name}`);
+    }
+    window.closeModal();
+  } catch (e) { console.error(e); alert("Error saving: " + e.message); }
+};
+
+document.getElementById('btnDeleteItem').onclick = async () => {
+  if (!currentEditId) return;
+  if (confirm("Permanently delete this item?")) {
+    try {
+      const item = inventory.find(i => i.id === currentEditId);
+      await deleteDoc(doc(db, "inventory", currentEditId));
+      logAudit("DELETE_ITEM", `Deleted: ${item ? item.name : currentEditId}`);
+      window.closeModal();
+    } catch (e) { alert("Error deleting."); }
+  }
+};
+
+// =============================
+// 13. BULK ACTIONS
+// =============================
 document.getElementById('btnOpenBulk').onclick = () => {
   document.querySelector('#bulkTable tbody').innerHTML = ''; 
   renderBulkTable(); document.getElementById('bulkModal').style.display = 'flex';
@@ -1081,9 +1018,55 @@ window.processBulkAction = async (id, action) => {
   }
 };
 
-// Global Click
+// =============================
+// GLOBAL: CLICK OUTSIDE + CUSTOM TOOLTIP LOGIC
+// =============================
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
         event.target.style.display = "none";
     }
 };
+
+// --- CUSTOM TOOLTIP EVENT LISTENERS ---
+const tooltip = document.getElementById('globalTooltip');
+if (tooltip) {
+    document.addEventListener('mouseover', (e) => {
+        // Check for image tooltip
+        const targetImg = e.target.closest('[data-tooltip-img]');
+        if(targetImg) {
+            const imgSrc = targetImg.getAttribute('data-tooltip-img');
+            if(imgSrc) {
+                tooltip.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = imgSrc;
+                tooltip.appendChild(img);
+                tooltip.style.display = 'block';
+                requestAnimationFrame(() => { tooltip.style.opacity = '1'; });
+                return;
+            }
+        }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if(tooltip.style.opacity === '1') {
+            let top = e.pageY + 15;
+            let left = e.pageX + 15;
+            
+            if (left + 220 > window.innerWidth) left = e.pageX - 235;
+            if (top + 220 > window.innerHeight) top = e.pageY - 220; 
+
+            tooltip.style.top = top + 'px';
+            tooltip.style.left = left + 'px';
+        }
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const targetImg = e.target.closest('[data-tooltip-img]');
+        if(targetImg) {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+                if (tooltip.style.opacity === '0') tooltip.style.display = 'none';
+            }, 100);
+        }
+    });
+}

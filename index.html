@@ -231,6 +231,33 @@
       .main { padding: 15px; }
       .cards { grid-template-columns: 1fr; }
     }
+
+    /* --- CUSTOM TOOLTIP (Text & Image Support) --- */
+    #globalTooltip {
+      position: fixed;
+      background: white; /* Changed to white for images */
+      color: #333;
+      padding: 5px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s ease-in-out;
+      z-index: 10000;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); /* Stronger shadow */
+      border: 1px solid #cbd5e1;
+      max-width: 220px; /* Limit width */
+      display: none; /* Hidden by default */
+    }
+
+    #globalTooltip img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 4px;
+      max-height: 200px;
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
@@ -334,7 +361,6 @@
                 <th>Qty</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th>Action</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -367,8 +393,6 @@
               <th>Category</th> 
               <th>Quantity</th>
               <th>Unit Prices</th>
-              <th style="min-width: 140px;">Action</th>
-            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -598,6 +622,8 @@
       <button onclick="document.getElementById('viewItemModal').style.display='none'" class="btn" style="width:100%; margin-top:20px;">Close</button>
     </div>
   </div>
+
+<div id="globalTooltip"></div>
 
   <script type="module" src="renderers.js"></script>
 </body>
